@@ -1,0 +1,68 @@
+version: 2
+
+models:
+  - name: dim_item
+    description: SCD Type 2 item dimension (name/type/rarity history).
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: market_hash_name
+        tests: [not_null]
+
+  - name: fct_price_observation
+    description: Grain = item x currency x observed_at. Every raw price/listing observation.
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: market_hash_name
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  - name: fct_orderbook_snapshot
+    description: Grain = item x currency x observed_at. Order-book depth measures.
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: market_hash_name
+        tests: [not_null]
+      - name: lowest_sell
+        tests: [not_null]
+      - name: highest_buy
+        tests: [not_null]
+
+  - name: fct_price_change
+    description: CDC change events (Phase 2).
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: field
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["lowest_sell", "highest_buy", "sell_listings", "volume"]
+
+  - name: mart_item_daily
+    description: OHLC + volume + time-weighted average spread, per item per day per money domain.
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: observation_date
+        tests: [not_null]
+      - name: money_domain
+        tests: [not_null]
+
+  - name: mart_cross_currency_dislocation
+    description: >
+      Phase 6: FX-adjusted price gaps per item/date/currency against a USD baseline for
+      the same item/date, using real ECB rates (seeds/dim_fx_rate.csv).
+    columns:
+      - name: app_id
+        tests: [not_null]
+      - name: market_hash_name
+        tests: [not_null]
+      - name: iso_code
+        tests: [not_null]
+      - name: usd_equivalent
+        tests: [not_null]

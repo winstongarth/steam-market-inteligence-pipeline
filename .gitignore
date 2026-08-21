@@ -1,0 +1,40 @@
+# Data — never commit scraped Steam data
+data/
+*.parquet
+*.duckdb
+*.duckdb.wal
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+.uv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local run logs (soak-test transcripts, etc.)
+logs_*.txt
+logs/
+
+# dbt
+dbt/*.duckdb
+dbt/*.duckdb.wal
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+
+# Claude Code runtime state
+.claude/

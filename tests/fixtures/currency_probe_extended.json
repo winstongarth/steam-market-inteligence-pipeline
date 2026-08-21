@@ -1,0 +1,132 @@
+{
+  "1": {
+    "label_guess": "USD",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "$39.25",
+      "volume": "105",
+      "median_price": "$52.52"
+    }
+  },
+  "2": {
+    "label_guess": "GBP",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "£28.84",
+      "volume": "105",
+      "median_price": "£38.60"
+    }
+  },
+  "3": {
+    "label_guess": "EUR",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "33,72€",
+      "volume": "105",
+      "median_price": "45,12€"
+    }
+  },
+  "4": {
+    "label_guess": "CHF",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "CHF 31.65",
+      "volume": "105",
+      "median_price": "CHF 42.34"
+    }
+  },
+  "5": {
+    "label_guess": "RUB",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "3338,26 руб.",
+      "volume": "105",
+      "median_price": "4465,76 руб."
+    }
+  },
+  "7": {
+    "label_guess": "BRL",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "R$ 202,91",
+      "volume": "105",
+      "median_price": "R$ 271,45"
+    }
+  },
+  "8": {
+    "label_guess": "JPY",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "¥ 6,228",
+      "volume": "105",
+      "median_price": "¥ 8,330.36"
+    }
+  },
+  "10": {
+    "label_guess": "IDR?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "Rp 700 697",
+      "volume": "105",
+      "median_price": "Rp 937 354.99"
+    }
+  },
+  "13": {
+    "label_guess": "SGD?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "S$49.99",
+      "volume": "105",
+      "median_price": "S$66.88"
+    }
+  },
+  "18": {
+    "label_guess": "UAH?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "1 757₴",
+      "volume": "105",
+      "median_price": "2 350,34₴"
+    }
+  },
+  "20": {
+    "label_guess": "CAD?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "CDN$ 54.37",
+      "volume": "105",
+      "median_price": "CDN$ 72.74"
+    }
+  },
+  "23": {
+    "label_guess": "CNY?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "¥ 266.58",
+      "volume": "105",
+      "median_price": "¥ 356.62"
+    }
+  },
+  "24": {
+    "label_guess": "INR?",
+    "status": 200,
+    "body": {
+      "success": true,
+      "lowest_price": "₹ 3,756",
+      "volume": "105",
+      "median_price": "₹ 5,023.43"
+    }
+  }
+}

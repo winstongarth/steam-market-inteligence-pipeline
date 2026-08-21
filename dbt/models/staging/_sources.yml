@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: >
+      Every poll response, verbatim, written by ingest/scheduler.py via
+      streaming/bronze_writer.py. Partitioned dt/hour/app_id/endpoint.
+    meta:
+      external_location: "read_parquet('s3://steam-lake/bronze/**/*.parquet', hive_partitioning=true, union_by_name=true)"
+    tables:
+      - name: raw_envelopes
+
+  - name: silver
+    description: >
+      CDC change events from streaming/cdc_job.py, landed by streaming/silver_writer.py.
+      Only present when a watched field actually moved between observations.
+    meta:
+      external_location: "read_parquet('s3://steam-lake/silver/change_events/**/*.parquet', hive_partitioning=true, union_by_name=true)"
+    tables:
+      - name: change_events

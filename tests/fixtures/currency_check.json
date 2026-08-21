@@ -1,0 +1,27 @@
+{
+  "1": {
+    "assumed_label": "USD",
+    "status": 200,
+    "lowest_price": "$39.25"
+  },
+  "2": {
+    "assumed_label": "GBP",
+    "status": 200,
+    "lowest_price": "£28.84"
+  },
+  "3": {
+    "assumed_label": "EUR",
+    "status": 200,
+    "lowest_price": "33,72€"
+  },
+  "20": {
+    "assumed_label": "SGD",
+    "status": 200,
+    "lowest_price": "CDN$ 54.37"
+  },
+  "23": {
+    "assumed_label": "IDR",
+    "status": 200,
+    "lowest_price": "¥ 266.58"
+  }
+}

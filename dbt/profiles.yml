@@ -1,0 +1,21 @@
+steam_market:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Must be absolute when invoked from a process whose CWD isn't this directory —
+      # Airflow's BashOperator runs each subprocess in a fresh temp dir as CWD (found
+      # empirically: `dbt seed` and the next `dbt run` each silently opened a different
+      # empty DuckDB file at a relative "steam_market.duckdb", even with --project-dir set
+      # correctly — see docs/DECISIONS.md). DUCKDB_PATH defaults to the plain relative
+      # name so host-side `cd dbt && dbt run` still works unchanged.
+      path: "{{ env_var('DUCKDB_PATH', 'steam_market.duckdb') }}"
+      threads: 4
+      extensions:
+        - httpfs
+      settings:
+        s3_endpoint: "{{ env_var('S3_ENDPOINT', 'localhost:9000') }}"
+        s3_access_key_id: "{{ env_var('S3_ACCESS_KEY', 'minioadmin') }}"
+        s3_secret_access_key: "{{ env_var('S3_SECRET_KEY', 'minioadmin') }}"
+        s3_use_ssl: false
+        s3_url_style: path
