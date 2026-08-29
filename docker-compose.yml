@@ -116,7 +116,9 @@ services:
       # sidesteps the question of exactly which Airflow internals would need chasing.
       PYTHONPATH: /opt/project
       ALERT_WEBHOOK_URL: http://webhook-receiver:9109/alert
-      _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core==1.12.3 dbt-duckdb==1.11.0 boto3 requests great-expectations"
+      GRAFANA_POSTGRES_URL: postgresql+psycopg2://marts:marts@postgres-marts:5432/marts
+      DASHBOARD_APP_IDS: "730"
+      _PIP_ADDITIONAL_REQUIREMENTS: "dbt-core==1.12.3 dbt-duckdb==1.11.0 boto3 requests great-expectations sqlalchemy psycopg2-binary"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./:/opt/project
@@ -142,13 +144,57 @@ services:
     depends_on:
       postgres-airflow:
         condition: service_healthy
+      postgres-marts:
+        condition: service_healthy
     environment: *airflow-env
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./:/opt/project
     command: scheduler
 
+  # --- Dashboard layer -----------------------------------------------------------------
+  # Grafana can't query DuckDB's embedded file directly without an unsigned community
+  # plugin (extra install/signing friction, less predictable offline). Postgres is a
+  # first-party Grafana datasource with zero plugins — same reasoning as postgres-airflow
+  # above, just for gold-mart data instead of Airflow metadata. analytics/export_to_grafana.py
+  # is the one-way sync: DuckDB marts (source of truth) -> this Postgres (dashboard cache).
+  postgres-marts:
+    image: postgres:16
+    container_name: steam-postgres-marts
+    environment:
+      POSTGRES_USER: marts
+      POSTGRES_PASSWORD: marts
+      POSTGRES_DB: marts
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-marts-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marts"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: steam-grafana
+    depends_on:
+      postgres-marts:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
 volumes:
   redpanda-data:
   minio-data:
   postgres-airflow-data:
+  postgres-marts-data:
+  grafana-data:

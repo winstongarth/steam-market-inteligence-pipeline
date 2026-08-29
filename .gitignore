@@ -36,5 +36,7 @@ dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
 
-# Claude Code runtime state
+# Local editor / tool state
 .claude/
+.vscode/
+.idea/

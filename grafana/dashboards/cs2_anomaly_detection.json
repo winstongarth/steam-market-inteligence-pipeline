@@ -1,0 +1,167 @@
+{
+  "id": null,
+  "uid": "cs2-anomaly-detection",
+  "title": "CS2 — Anomaly Detection",
+  "description": "z-score / EWMA-spread / volume-spike / crossed-book anomalies from analytics/anomaly.py (mart_anomaly), synced from DuckDB via analytics/export_to_grafana.py.",
+  "tags": ["steam-market", "cs2", "anomaly-detection"],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "app_id",
+        "type": "query",
+        "label": "Game (app_id)",
+        "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+        "query": "SELECT DISTINCT app_id FROM dim_item ORDER BY 1",
+        "refresh": 2,
+        "current": { "text": "730", "value": "730" },
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total anomalies in range",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS total FROM mart_anomaly WHERE app_id = $app_id AND $__timeFilter(detected_at)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Crossed-book anomalies",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [
+          { "color": "green", "value": null },
+          { "color": "orange", "value": 1 }
+        ] } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS crossed_book FROM mart_anomaly WHERE app_id = $app_id AND anomaly_type = 'crossed_book' AND $__timeFilter(detected_at)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Highest severity in range",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 0.5 },
+            { "color": "red", "value": 0.8 }
+          ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(max(severity), 0) AS max_severity FROM mart_anomaly WHERE app_id = $app_id AND $__timeFilter(detected_at)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Last synced from DuckDB",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "dateTimeAsIso" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT max(synced_at) AS last_sync FROM mart_anomaly"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Anomalies by type",
+      "type": "piechart",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 9, "w": 8, "x": 0, "y": 5 },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] } },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT anomaly_type, count(*) AS count FROM mart_anomaly WHERE app_id = $app_id AND $__timeFilter(detected_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Anomaly severity over time, by type",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 9, "w": 16, "x": 8, "y": 5 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "points", "pointSize": 7, "showPoints": "always" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT detected_at AS time, severity, anomaly_type FROM mart_anomaly WHERE app_id = $app_id AND $__timeFilter(detected_at) ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Recent anomalies",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 14 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "severity" }, "properties": [{ "id": "unit", "value": "percentunit" }] }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "detected_at", "desc": true }] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT detected_at, market_hash_name, anomaly_type, severity, explanation FROM mart_anomaly WHERE app_id = $app_id AND $__timeFilter(detected_at) ORDER BY detected_at DESC LIMIT 200"
+        }
+      ]
+    }
+  ]
+}

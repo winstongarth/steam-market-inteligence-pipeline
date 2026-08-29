@@ -6,25 +6,25 @@ ADR-style. Newest first.
 
 ## 2026-08-21 — Phase 7: query tuning against DuckDB, not Snowflake; found a real NULL-join correctness bug along the way
 
-**Context:** CLAUDE.md Phase 7.1 asks for the 3 slowest analytical queries on
-`mart_item_daily`/`fct_orderbook_snapshot`, Snowflake query profiles, and a diagnosis
-(scan volume / spilling / poor pruning) with a fix (clustering keys, rewrite, or
+**Context:** The goal for this phase: profile the 3 slowest analytical queries on
+`mart_item_daily`/`fct_orderbook_snapshot`, capture Snowflake query profiles, and diagnose
+each (scan volume / spilling / poor pruning) with a fix (clustering keys, rewrite, or
 pre-aggregation), before/after recorded.
 
-**Snowflake was never reached.** It's been deliberately deferred since Phase 3 pending
-Phase 1's soak test and Phase 4's stability — neither happened this session (both
+Snowflake was never reached. It's been deliberately deferred since Phase 3 pending
+Phase 1's soak test and Phase 4's stability — neither has happened yet (both
 still-open gaps, unchanged). So "capture Snowflake query profiles" and "fix via
-clustering keys" are answered honestly as: not applicable here. DuckDB's `EXPLAIN
+clustering keys" are not applicable here. DuckDB's `EXPLAIN
 ANALYZE` is the real substitute for the diagnosis half of this exercise; clustering keys
 have no DuckDB equivalent (DuckDB tables aren't micro-partitioned the way Snowflake's
 are), so that specific fix category genuinely doesn't transfer — pre-aggregation and
 query rewrite do, and both show up below.
 
-**Scale caveat, stated up front:** this session's tables are small (3,935 rows in
+**Scale caveat, stated up front:** the current dataset's tables are small (3,935 rows in
 `mart_item_daily`, 16,130 in `fct_price_observation`, 96 in `fct_orderbook_snapshot`) —
 nowhere near the 30-day production scale the spec assumes (Phase 1's 24h soak test is
 still pending). Wall-clock differences at this size are sometimes tiny in absolute terms;
-recorded honestly as such rather than dressed up. Where a real, scale-independent signal
+recorded as such rather than dressed up. Where a real, scale-independent signal
 existed (HTTP GET count, operator shape, row-count correctness), that's what's reported.
 Script: `scripts/phase7_query_tuning.py`. Full run: `/tmp/phase7_tuning.log`.
 
@@ -82,15 +82,15 @@ query pattern becomes a real model rather than a one-off tuning example.
 tied to real, already-documented bugs/patterns in this codebase. Rejected — reusing Q1's
 already-fixed FX join and discovering Q3's NULL-join bug live produced genuinely real
 findings instead of a performative "look how I'd tune a query" exercise; that's more
-honest and more useful for the interview-defense goal in CLAUDE.md §8.6 ("show me a query
-you made faster and how you knew").
+useful for defending this work later ("show me a query you made faster and how you
+knew").
 
 ---
 
 ## 2026-08-21 — Phase 6 complete: circuit breaker tripped for real, two bugs found and fixed, no persistent structural FX gap found
 
-**Context:** CLAUDE.md Phase 6 (optional, high value): poll a 50-item watchlist across
-USD/EUR/SGD/IDR, join to daily FX rates, compute FX-adjusted price gaps.
+**Context:** The goal for this phase (optional, high value): poll a 50-item watchlist
+across USD/EUR/SGD/IDR, join to daily FX rates, and compute FX-adjusted price gaps.
 
 **Real circuit breaker trip.** `scripts/phase6_fx_poll.py` (50 items × 4 currencies = 200
 requests at the Phase 0-measured "safe" 0.5 req/s rate) hit three consecutive 429s after
@@ -99,14 +99,14 @@ breaker, built and tested in Phase 1, working exactly as designed under real sus
 load for the first time). This means Phase 0's single ramp-test measurement (~2 req/s
 break point, 0.5 req/s chosen as 25% of that) wasn't fully representative under a longer,
 denser burst — flagged as a real caveat back in `docs/PHASE0_FINDINGS.md` ("a single data
-point... not a guarantee Steam's actual limit is static"), now confirmed. **Did not
-evade the halt** — the 20 successful requests (5 items × 4 currencies) were landed and
-used to build and validate the FX analysis pipeline; the remaining 45 items are queued to
-resume once the halt clears, at a more conservative rate.
+point... not a guarantee Steam's actual limit is static"), now confirmed. The halt
+wasn't evaded — the 20 successful requests (5 items × 4 currencies) were landed and
+used to build and validate the FX analysis pipeline; the remaining 45 items resumed once
+the halt cleared, at a more conservative rate (see below).
 
 **Real FX rates, not fabricated:** `ingest/fx_rates.py` fetches from Frankfurter
-(frankfurter.dev — free, no key, ECB-sourced), matching the project's own "primary
-sources, not paid aggregators" ethos from CLAUDE.md §3. Found while fetching: the ECB
+(frankfurter.dev — free, no key, ECB-sourced), matching the project's own principle of
+using primary sources, not paid aggregators. Found while fetching: the ECB
 doesn't publish same-day rates — requesting "today" transparently falls back to the
 latest available prior date. Our ~2-day window effectively has one real rate set (dated
 2026-08-20), cached under both dates.
@@ -126,8 +126,8 @@ purely a SQL/CSV-loading quirk.)
 **Bug #2 (found by checking the numbers, not trusting a green `dbt run`):
 `mart_cross_currency_dislocation`'s first version grouped by `observation_date` and
 joined ALL of a day's USD observations against ALL non-USD observations for that
-item/day. AK-47 | Redline was polled dozens of times in USD across the whole session (the
-Tier A watchlist item) but EUR/SGD/IDR only once, during this phase's synchronized
+item/day. AK-47 | Redline was polled dozens of times in USD over the course of the
+project so far (the Tier A watchlist item) but EUR/SGD/IDR only once, during this phase's synchronized
 4-currency batch — the naive join fanned out into spurious USD-vs-USD rows (e.g. one row
 showing a "0.20% gap" between two USD polls hours apart, which is just intraday price
 movement, not a currency effect) and diluted the real cross-currency comparisons against
@@ -137,7 +137,7 @@ matching each non-USD observation to the most recent USD observation at or befor
 Post-fix, every row's `usd_baseline_observed_at` is within seconds of its own
 `observed_at`, confirming the match is genuinely concurrent.
 
-**Resumed after the halt cleared**, at a more conservative `STEAM_RPS=0.25` (half the
+The halt cleared and polling resumed at a more conservative `STEAM_RPS=0.25` (half the
 original rate): the remaining 45 items × 4 currencies = 180 requests all completed with
 real `200 OK` responses, zero further 429s, zero circuit-breaker trips
 (`/tmp/phase6_poll_resume.log`, 2026-08-21 06:09–06:21 UTC). Combined with the 20 requests
@@ -157,7 +157,7 @@ USD baseline via the ASOF join):**
 
 Means are small relative to their standard deviations (roughly 1-2 standard errors from
 zero at n=50) and every one straddles a near-zero median — not the signature of a
-consistent, one-directional regional markup. The **honest conclusion, now with the full
+consistent, one-directional regional markup. The **conclusion, now with the full
 sample, is that this data does not support a persistent structural cross-currency
 pricing gap** on Steam's market. This resolves the n=5 partial sample's ambiguous read
 (Kilowatt Case's outsized EUR/IDR gaps looked like they might be a real signal on 5
@@ -185,11 +185,11 @@ conclusion; the conclusion is now backed by the full watchlist, not a 5-item sam
 
 ## 2026-08-21 — Phase 5: anomaly detection, hand-verified against raw Bronze data
 
-**Context:** CLAUDE.md Phase 5 wants four detector classes (rolling z-score on log
+**Context:** The goal for this phase: build four detector classes (rolling z-score on log
 returns, EWMA spread-widening, volume-spike with day-of-week seasonality, crossed-book as
-a distinct class) materialized into `mart_anomaly` with a severity score and human-
-readable explanation, then hand-verified — "record the hit rate honestly, including
-false positives."
+a distinct class), materialize them into `mart_anomaly` with a severity score and human-
+readable explanation, then hand-verify — recording the hit rate, including false
+positives.
 
 **Built as a Python module** (`analytics/anomaly.py`), matching the repo layout's own
 naming (`analytics/anomaly.py`, not a dbt model) — the numerical work (rolling/EWM
@@ -200,13 +200,13 @@ back into the same DuckDB file.
 
 **Money-domain-safe from the start**, not bolted on after a bug this time: every detector
 groups by `money_domain` (or relies on `fct_orderbook_snapshot`'s rows already being
-internally currency-consistent) — the same fix needed three separate times earlier this
-session (streaming CDC, dbt OHLC). Getting it right up front here, with a regression test
-(`test_price_zscore_respects_money_domain_grouping`) proving a `currency:1` series and a
-`currency:8` series for the same item never get compared to each other.
+internally currency-consistent) — the same fix needed three separate times earlier in
+this project (streaming CDC, dbt OHLC). Getting it right up front here, with a regression
+test (`test_price_zscore_respects_money_domain_grouping`) proving a `currency:1` series
+and a `currency:8` series for the same item never get compared to each other.
 
-**Honest result on data scope:** three of the four detectors (price z-score, spread-
-widening, volume-spike) require history this session's small, disconnected dataset
+Data scope is the limiting factor here: three of the four detectors (price z-score, spread-
+widening, volume-spike) require history the current, small, disconnected dataset
 doesn't have — the deepest item has only 2 distinct calendar days of observations, and
 `price_zscore`/`volume_spike` need 5+/3+ before they'll flag anything, by design (skip
 rather than fabricate a baseline from insufficient history). Real run against the actual
@@ -235,14 +235,14 @@ real?) was checked as rigorously as it could be.
 severity). Hand-verify top 10 — done for crossed_book (only populated type), 3 spot-
 checked against raw data, 0 false positives in that sample; the other three detector
 types have nothing to verify yet since they correctly produced no output on this dataset.
-Record hit rate honestly — recorded above, including the explicit limitation on what
-"verified" means here.
+Hit rate — recorded above, including the explicit limitation on what "verified" means
+here.
 
 ---
 
 ## 2026-08-21 — Phase 4: orchestration DAG and blocking quality gates, verified end-to-end
 
-**Context:** CLAUDE.md Phase 4 wants an Airflow DAG (`wait_for_bronze -> copy_into_snowflake
+**Context:** The goal for this phase: an Airflow DAG (`wait_for_bronze -> copy_into_snowflake
 -> run_quality_gates -> dbt_run_staging -> dbt_test_staging (BLOCKING) -> dbt_run_marts ->
 dbt_test_marts (BLOCKING) -> detect_anomalies -> publish_alerts`), gates that actually
 block (proven with injected bad data, evidence saved), and alerting routed to SNS or a
@@ -271,8 +271,8 @@ local webhook.
   no benefit.
 
 **Gates proven to actually block, with real injected bad data, before the DAG was even
-written** (CLAUDE.md's own instruction: "a quality gate nobody has seen fail is not
-evidence of anything"):
+written** (the guiding principle here: a quality gate nobody has seen fail is not
+evidence of anything):
 - The GX Bronze suite: dropped a required column (schema drift), backdated all
   `observed_at` by 48h (freshness), nulled an `app_id` — all three correctly failed,
   `docs/PHASE4_GATE_FAILURE_EVIDENCE.txt`.
@@ -335,19 +335,19 @@ that file from inside the container, not assumed from the sender's "success" log
 alone.
 
 **Exit criterion status:** "Gates must actually block... prove it" — done, with saved
-evidence (above). "DAG runs unattended for 72h" — **not done**, same honest gap as Phase
-1's 24h soak test; this session ran the DAG on-demand via `airflow dags test`, not on a
+evidence (above). "DAG runs unattended for 72h" — **not done**, same gap as Phase
+1's 24h soak test; the DAG was run on-demand via `airflow dags test`, not on a
 schedule. `airflow-scheduler` (the service that would actually run it unattended) was
-never started as a persistent service this session — deliberate, matching the "don't
+never started as a persistent service — deliberate, matching the "don't
 claim what wasn't measured" rule.
 
 ---
 
 ## 2026-08-21 — Phase 3: DuckDB only, Snowflake deferred per the spec's own discipline
 
-**Context:** CLAUDE.md §4.1: "build and debug the entire Gold layer on DuckDB first...
-Only when Phases 1–4 are complete and stable do we open the Snowflake trial." Phase 1's
-24h soak test still hasn't completed (multiple attempts interrupted — see chat history),
+**Context:** The constraint driving this phase: build and debug the entire Gold layer on
+DuckDB first, and only open the Snowflake trial once Phases 1-4 are complete and stable.
+Phase 1's 24h soak test still hasn't completed (multiple attempts interrupted so far),
 and Phase 4 (orchestration/quality gates) hasn't started.
 
 **Decision:** build the full dbt project against DuckDB only this phase. Do not open the
@@ -355,7 +355,7 @@ Snowflake trial. This isn't a shortcut — it's the spec's own explicit sequenci
 and opening a metered trial before Phases 1/4 are stable would burn budget the spec
 specifically warns against.
 
-**What was built:** `dbt/` — seeds (`dim_currency`, `dim_game`, `item_bucket_map` — the
+This phase built out `dbt/` — seeds (`dim_currency`, `dim_game`, `item_bucket_map` — the
 last one is `ingest/nameid_resolver.py`'s cache, exported: 612 real `market_hash_name` →
 `market_bucket_id` pairs resolved during Phase 1), staging models (one per Bronze
 endpoint + one for Silver's change events), intermediate models (`int_item_resolved`
@@ -386,7 +386,7 @@ row. Verified post-fix: `AK-47 | Redline (Field-Tested)` now shows three interna
 consistent domain rows (`currency:1` ~$39 range, `currency:8` ~¥6,200 range,
 `endpoint:search_render` ~$39 range) instead of one row blending all three scales.
 
-**Money parsing exists twice, deliberately:** `dbt/macros/parse_price.sql` ports
+Money parsing exists twice, and deliberately so: `dbt/macros/parse_price.sql` ports
 `streaming/money.py`'s logic to SQL, same currency-format table, same "always ×100" minor-
 units convention. This is normal medallion-architecture duplication (documented in
 `cdc_job.py`'s module docstring for the streaming/dbt split generally), not an oversight —
@@ -413,7 +413,7 @@ whichever first).
 
 **Impact if left as-is:** a crash or kill between an auto-commit and the next flush would
 lose the buffered-but-unflushed records permanently — on restart, the consumer resumes
-past the already-committed offset and never re-reads them. In this session's testing no
+past the already-committed offset and never re-reads them. In testing so far no
 loss actually occurred (record counts matched: 1,701 in Kafka, 1,701 in Bronze Parquet),
 because every run so far exited through the graceful `finally: await writer.stop()` path,
 which flushes before disconnecting. But Phase 1's actual 24h unattended run is exactly the
@@ -469,10 +469,10 @@ Regression tests for both the fixed case and the specific gap that let it throug
 
 ## 2026-08-21 — Phase 2 CDC job runs, verified end-to-end; compression ratio measured but not representative yet
 
-**Context:** CLAUDE.md Phase 2 exit criterion: "Change events flow end to end. Measure and
-record the compression ratio — raw observations in versus change events out."
+**Context:** The exit criterion for this phase: change events flow end to end, with the
+compression ratio measured and recorded — raw observations in versus change events out.
 
-**Spark runs in Docker, not on the Windows host directly.** First attempt at a local
+Spark runs in Docker, not on the Windows host directly. First attempt at a local
 Structured Streaming query (even with a `memory` sink) failed with
 `UnsatisfiedLinkError: NativeIO$Windows.access0` — Structured Streaming's checkpointing
 needs Hadoop's native Windows IO layer (`winutils.exe`/`hadoop.dll`), which this project
@@ -497,7 +497,7 @@ writing to `market.changes.v1`. Real output, correctly shaped:
 `{"app_id":730,"market_hash_name":"FAMAS | Crypsis (Field-Tested)","field":"lowest_sell","previous":43.0,"current":54.0,"delta":11.0,"pct_change":25.58,"observed_at":"..."}`.
 No exceptions in the run.
 
-**Compression ratio, measured honestly:**
+**Compression ratio:**
 
 | | count |
 |---|---|
@@ -506,8 +506,8 @@ No exceptions in the run.
 | Distinct `(app_id, market_hash_name)` keys seen from search_render alone | 3,021 |
 | Change events emitted to `market.changes.v1` | 19,554 (`lowest_sell`: 8,024 · `sell_listings`: 11,519 · `highest_buy`: 10 · `volume`: 1) |
 
-**This is not a compression — change events (19,554) outnumber raw observations
-(16,110).** That's a real, explainable result, not a bug: this backlog was accumulated
+This is not a compression — change events (19,554) outnumber raw observations
+(16,110). That's a real, explainable result, not a bug: this backlog was accumulated
 across ~18 hours of disconnected, ad-hoc test runs (multiple `phase1_smoke_test.py`
 invocations, several aborted scheduler starts), not continuous tight polling. Repeat
 observations of the same item are typically hours apart, and CS2 prices/listings genuinely
@@ -515,8 +515,8 @@ drift that much in practice — so most repeats trigger a real change on both wa
 `search_render` carries (`lowest_sell` and `sell_listings`), rather than the
 mostly-identical back-to-back polls a `compression ratio` metric is meant to characterize.
 
-**Decision:** report this measurement honestly (recorded in `docs/METRICS.md`) rather than
-either hiding it or reframing it as something it isn't. The CDC mechanism itself is
+**Decision:** report this measurement as recorded in `docs/METRICS.md`, not reframed as
+something it isn't. The CDC mechanism itself is
 verified correct — the *number* isn't representative of steady-state 5-minute-cadence
 polling, which is exactly what the pending 24h Phase 1 soak test would generate. Re-measure
 once that data exists; don't backfill a fabricated "would probably compress to X%" claim.
@@ -527,12 +527,12 @@ once that data exists; don't backfill a fabricated "would probably compress to X
 
 **Context:** the entry below this one ("`item_nameid` resolution method is broken") left
 Phase 1's most valuable endpoint (order-book depth) blocked, with a plan to trace the live
-SPA's network calls via browser dev tools. No browser-automation tool was available this
-session, so the trace was done statically instead: downloaded the bucket page's code-split
+SPA's network calls via browser dev tools. No browser automation was available, so the
+trace was done statically instead: downloaded the bucket page's code-split
 JS chunks (364 `modulepreload` chunks referenced from the page) and grepped/read the
 minified source directly.
 
-**What was found.** The SPA does not use `item_nameid` or the old
+What was found: the SPA does not use `item_nameid` or the old
 `/market/itemordershistogram/` endpoint at all anymore. It uses a small query-action RPC
 transport (`ingest/nameid_resolver.py`'s module docstring has the full trace):
 
@@ -582,7 +582,7 @@ expected" (a real ban signal) from "HTML because we explicitly asked for an HTML
 (`expect_json=False`, normal for §3.3). Fixed by gating the check on `expect_json`;
 regression test in `tests/test_client.py`.
 
-**Impact:** Tier A (`ingest/scheduler.py`) is no longer a no-op. Verified end-to-end,
+Tier A (`ingest/scheduler.py`) is no longer a no-op as a result. Verified end-to-end,
 Phase 1, via `scripts/phase1_smoke_test.py`: search_render → priceoverview → bucket-page
 resolution → orderbook fetch → Kafka → Bronze Parquet in MinIO → queryable from DuckDB, all
 in one run against the real site.
@@ -600,7 +600,7 @@ in `ingest/nameid_resolver.py`'s docstring, not just here.
 **[SUPERSEDED — see the entry above, resolved same day via a different mechanism entirely.
 Left intact below for the record of what was tried and ruled out.]**
 
-**Context:** CLAUDE.md §3.3 documents resolving `item_nameid` by regex-matching
+**Context:** The documented approach for resolving `item_nameid`: regex-match
 `Market_LoadOrderSpread(\d+)` out of the HTML at `/market/listings/{appid}/{hash_name}`.
 
 **What we found (Phase 0):** that URL now 302-redirects, for every item tested (commodity
@@ -628,23 +628,23 @@ Everything else in Phase 1 (ratelimit.py, client.py, the Tier B/C `search/render
 Bronze writer) is unaffected and can proceed independently.
 
 **Status:** open. Not blocking Phase 0 exit for the parts that don't depend on it, but
-blocking the single most differentiating endpoint in the project (§1 of CLAUDE.md — the
+blocking the single most differentiating endpoint in the project — the
 order-book depth endpoint is what makes this a marketplace project rather than a
-price-scraping project). Should be the first thing tackled at the start of Phase 1.
+price-scraping project. Should be the first thing tackled at the start of Phase 1.
 
 ---
 
 ## 2026-08-20 — Currency codes corrected from measured data
 
-**Context:** CLAUDE.md §3.7 assumed `currency=20` → SGD, `currency=23` → IDR.
+**Context:** The assumption going in: `currency=20` → SGD, `currency=23` → IDR.
 
 **What we found:** cross-checking `priceoverview` price-string formatting/symbols across a
 range of currency codes for a fixed item showed `20` → CAD (`CDN$`) and `23` → CNY (`¥`),
 not SGD/IDR. Correct codes: `10` → IDR (`Rp`), `13` → SGD (`S$`). `1`/`2`/`3` (USD/GBP/EUR)
 confirmed correct as documented.
 
-**Decision:** corrected in CLAUDE_4.md §3.7 directly and in `docs/PHASE0_FINDINGS.md`. Any
-Phase 6 cross-currency watchlist work must use the corrected codes.
+**Decision:** corrected in `docs/PHASE0_FINDINGS.md`; any Phase 6 cross-currency watchlist
+work must use the corrected codes.
 
 **Alternative considered:** trust the spec's codes and catch the error later via the
 `priceoverview` reconciliation cross-check in Phase 6. Rejected — Phase 0 exists precisely
@@ -655,17 +655,17 @@ was five cheap requests.
 
 ## 2026-08-20 — Breadth endpoint page size is capped at 10, not ~100
 
-**Context:** CLAUDE.md §3.1 described `search/render` as returning ~100 items per request
-("100× more token-efficient than priceoverview") and said to verify whether `count` above
-100 is rejected.
+**Context:** The assumption going in: `search/render` returns ~100 items per request
+("100× more token-efficient than priceoverview"), with `count` above 100 possibly
+rejected — worth verifying.
 
 **What we found:** `count=10`, `count=100`, and `count=150` all returned exactly 10 results
 (`pagesize: 10` in every response), unauthenticated, from this IP. The token-efficiency
 framing in §3.1 does not hold under these conditions — a full CS2 catalog sweep
 (`total_count: 35,349`) is ~3,535 requests at 10 items/request, not ~354.
 
-**Decision:** corrected in CLAUDE_4.md §3.1. Did not investigate whether an authenticated
-session, different `l=`/`cc=` locale params, or some other undocumented param raises the
+**Decision:** corrected in `docs/PHASE0_FINDINGS.md`. Did not investigate whether an
+authenticated session, different `l=`/`cc=` locale params, or some other undocumented param raises the
 cap — that's plausible but speculative, and testing it thoroughly would cost more Phase 0
 request budget than it's worth right now. Recorded as a known open question rather than
 guessed at. Tier B/C sizing in Phase 1's scheduler should plan around the measured 10/request
@@ -675,8 +675,8 @@ figure unless a follow-up check finds otherwise.
 
 ## 2026-08-20 — Production poll rate set to 1 req / 2s (0.5 req/s)
 
-**Context:** CLAUDE.md §2.3 requires running at ~40% of the measured rate limit; §2.5
-requires backing off hard on 429s.
+**Context:** The requirement driving this: run at ~40% of the measured rate limit, and
+back off hard on 429s.
 
 **What we found:** ramping request rate against `priceoverview` hit the first 429 at request
 #21, roughly 2 requests/sec sustained. Recovery to `200` took ~30s after backing off.
@@ -686,7 +686,7 @@ Full methodology and log in `docs/PHASE0_FINDINGS.md` and `docs/PHASE0_RATELIMIT
 the measured 2 req/s break point — under the 40% ceiling, with margin, since this was a
 single measurement at one time of day and the real limit could be lower under different
 conditions. This applies as a **global** budget shared across tiers (Tier A histogram
-polling gets priority per CLAUDE.md §7.1.5), not an independent per-endpoint allowance —
+polling gets scheduling priority), not an independent per-endpoint allowance —
 otherwise Tier A and Tier B/C could each individually respect 0.5 req/s while jointly
 exceeding it.
 
@@ -695,3 +695,44 @@ day to get a more robust estimate. Rejected for now — one clean measurement pl
 safety margin (25% vs. the allowed 40%) is enough to start Phase 1; the adaptive backoff and
 circuit breaker in `ratelimit.py` are the real safety net regardless of how precise this
 single number is.
+
+---
+
+## Retrospective — what I'd do differently at scale
+
+- **Materialize more aggressively, sooner.** Phase 7's single most dramatic measured result
+  wasn't a clever join rewrite — it was the ~196× gap between a view stacked on live S3
+  reads and a materialized table. At real production volume, every intermediate model
+  queried more than once during a batch run should probably be a table, not a view; the
+  `+materialized: view` default for staging/intermediate was the right call for iteration
+  speed while this was actively being built, and the wrong call for a production query
+  path.
+- **A real per-request-identity rate limit, not a global one.** The current design uses one
+  global token bucket shared across all tiers (deliberately, to avoid Tier A + Tier B/C
+  jointly exceeding the measured limit even if each individually respects it). That's
+  correct for a single IP, but doesn't extend cleanly to a multi-worker or multi-IP setup —
+  a distributed rate limiter (e.g., Redis-backed token bucket) would be the real fix, not
+  something this project needed to build for a single-IP scope.
+- **Idempotent, replayable CDC state**, not just crash-safe writers. `bronze_writer.py` and
+  `silver_writer.py` are already crash-safe (`enable_auto_commit=False`, commit after flush
+  — a real bug caught and fixed, see above), but `cdc_job.py`'s per-key state store is
+  in-memory for this project's scope. At real scale, that state needs to survive a Spark
+  job restart without reprocessing the entire topic from the beginning — Structured
+  Streaming's checkpointing does this, but it wasn't exercised end-to-end here (no
+  long-running restart was ever tested).
+- **A currency/domain type, not a string convention.** The money-domain bug (found and
+  fixed three separate times — CDC, OHLC, the FX join — before it stopped recurring) is the
+  clearest single lesson from this project: an implicit invariant ("never compare prices
+  across currencies") that isn't enforced by the type system will eventually get violated
+  by a new code path that doesn't know about the convention. At scale, this should be a
+  real type (a `Money` value object carrying its currency, refusing to compare/add across
+  currencies at the language level) rather than a `money_domain` string that every new
+  query has to remember to filter on — Phase 7's Q3 finding (a `NULL`-currency equi-join
+  silently dropping rows) is the same root cause wearing a different SQL-semantics mask.
+- **Multi-IP / longer time horizon before trusting a single rate-limit measurement.** Phase
+  0's single ramp-test measurement (~2 req/s break point) turned out not to be fully
+  representative — the circuit breaker tripped for real in Phase 6 under a longer, denser
+  burst at a rate that had been running safely for hours elsewhere in the project. At real
+  scale this argues for continuous adaptive rate-limiting (back off automatically based on
+  live 429 rate, not a single historical measurement) rather than one static configured
+  number, however conservatively chosen.

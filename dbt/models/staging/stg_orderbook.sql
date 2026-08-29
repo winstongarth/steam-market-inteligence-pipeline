@@ -1,10 +1,10 @@
--- Order-book depth. Not the spec's original itemordershistogram — that endpoint is dead;
+-- Order-book depth. Not the original itemordershistogram endpoint — that endpoint is dead;
 -- this is the real replacement mechanism found in Phase 1 (docs/DECISIONS.md,
 -- "Order-book depth unblocked"). Money fields are already integer minor units, no string
 -- parsing needed here — unlike every other endpoint. Keyed by market_bucket_id, not
 -- market_hash_name (that identifier doesn't exist in this response at all); resolving it
 -- to an item name is int_item_resolved's job, one layer up, by design (staging stays
--- light-typing only, per the repo layout in CLAUDE_4.md §5).
+-- light-typing only, per the layer rules (README §05)).
 
 with source as (
     select app_id, observed_at, raw_payload, request_params

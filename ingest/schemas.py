@@ -1,6 +1,6 @@
 """Pydantic models for raw Steam Market payloads.
 
-Every field from Steam is optional until proven otherwise (CLAUDE.md §6) — models here are
+Every field from Steam is optional until proven otherwise (a rule this project applies throughout) — models here are
 deliberately permissive. Money stays as the locale-formatted string Steam returns; parsing
 to integer minor units happens exactly once, downstream in the Silver normalization pass
 (Phase 2), not here.

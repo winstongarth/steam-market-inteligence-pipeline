@@ -1,6 +1,6 @@
 {{ config(severity='warn') }}
 
--- Crossed book (CLAUDE.md Phase 4): "highest_buy > lowest_sell should be rare; each
+-- Crossed book: "highest_buy > lowest_sell should be rare; each
 -- occurrence is either a genuine arbitrage window or bad data, and we must distinguish
 -- them." Real finding, 2026-08-21: in this project's actual data, crossed-book rows are
 -- NOT rare — 25 of 96 orderbook observations (26%) are crossed, with spread_bps as

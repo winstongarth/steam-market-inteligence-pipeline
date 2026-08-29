@@ -1,4 +1,4 @@
-"""Order-book depth — the real, working replacement for the spec's §3.2
+"""Order-book depth — the real, working replacement for
 `/market/itemordershistogram/`. See ingest/nameid_resolver.py for how this session
 discovered it (traced from the live SPA's own JS bundles) and docs/DECISIONS.md for the
 full writeup.

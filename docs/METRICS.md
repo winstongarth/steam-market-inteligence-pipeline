@@ -1,7 +1,24 @@
 # Metrics
 
-Every number here is measured, with the method that produced it. Per CLAUDE.md's
-non-negotiable honesty rule: unmeasured numbers are recorded as `TBD`, never guessed.
+Every number here is measured, with the method that produced it. Unmeasured numbers are
+recorded as `TBD`, never estimated.
+
+## Status and open gaps
+
+These are the exit criteria that are **not** met yet, and why:
+
+- **Phase 1's 24h zero-429 soak test has never run.** Everything downstream that would
+  benefit from continuous steady-cadence data (CDC compression ratio, anomaly-detector hit
+  rates, Bronze partition growth) is measured against a short, disconnected ad-hoc run
+  instead, and flagged as such wherever it appears below.
+- **Airflow's DAG has never run unattended on a schedule for 72h** — `airflow-scheduler`
+  has never been started as a persistent service; the DAG has only been proven correct via
+  `airflow dags test` against real data.
+- **Snowflake has never been opened.** Deliberately deferred (see `docs/DECISIONS.md`,
+  Phase 3) pending the two gaps above — DuckDB carries the whole warehouse layer instead,
+  which is also why Phase 7's query tuning used `EXPLAIN ANALYZE` instead of Snowflake
+  query profiles, and why "add a clustering key" isn't in this project's fix list (DuckDB
+  has no clustering-key equivalent).
 
 ## Phase 0
 
@@ -12,7 +29,7 @@ non-negotiable honesty rule: unmeasured numbers are recorded as `TBD`, never gue
 | Rate limit — requests before first 429 | 21 requests | Ramp test, 2.0s→0.5s step-down, `priceoverview` endpoint. See `docs/PHASE0_RATELIMIT.json`. |
 | Rate limit — approximate break point | ~2 req/s sustained | Same ramp test; 429 occurred 4 requests into the 0.5s-interval (2 req/s) step. |
 | Recovery time after 429 | ~30 seconds | Backoff probe: still 429 at t+5s and t+15s, recovered (200) at t+30s. |
-| Chosen production rate | 1 request / 2s (0.5 req/s, ~25% of measured limit) | Derived: 40% ceiling per CLAUDE.md §2.3 applied to the ~2 req/s measured break point, rounded down for margin. |
+| Chosen production rate | 1 request / 2s (0.5 req/s, ~25% of measured limit) | Derived: the required 40% ceiling applied to the ~2 req/s measured break point, rounded down for margin. |
 | `pricehistory` without login | HTTP 400, `[]` | Single unauthenticated request, 2026-08-20. Confirms login required; endpoint out of scope. |
 
 ## Phase 1
@@ -67,7 +84,7 @@ DuckDB only this phase — Snowflake deliberately deferred, see `docs/DECISIONS.
 |---|---|---|
 | dbt models built green | 12/12 (7 staging/intermediate views, 5 mart/fact tables) | `dbt seed && dbt run --exclude dim_item && dbt snapshot && dbt run --select dim_item`, 2026-08-21 |
 | dbt tests passing | 15/15 | `dbt test`, 2026-08-21 |
-| `item_bucket_map` seed size | 612 rows | Exported from `ingest/nameid_resolver.py`'s on-disk cache (`data/cache/market_bucket_ids.json`) — every item this session's Tier A / bucket-page resolution actually resolved |
+| `item_bucket_map` seed size | 612 rows | Exported from `ingest/nameid_resolver.py`'s on-disk cache (`data/cache/market_bucket_ids.json`) — every item Tier A / bucket-page resolution actually resolved |
 | `fct_price_observation` row count | 16,110 | Matches Phase 2's independently-measured "item-level raw observations" count exactly — cross-validated across two independently-built pipelines (Spark streaming vs. dbt/DuckDB batch) on the same source data |
 | `fct_price_change` row count | 19,520 | Matches Phase 2's corrected CDC event count exactly |
 | `fct_orderbook_snapshot` row count | 96 | Matches Bronze's orderbook message count exactly — every orderbook observation's `market_bucket_id` resolved via the seed |
@@ -76,9 +93,8 @@ DuckDB only this phase — Snowflake deliberately deferred, see `docs/DECISIONS.
 | Bug found and fixed: OHLC currency-mixing | `open=3925, high=621400` for one item/day, pre-fix | Third instance of the money-domain bug class (see Phase 2 above and `docs/DECISIONS.md`) — found by spot-checking a real `mart_item_daily` row before trusting the model, not assumed correct because tests passed |
 | Bug verified fixed | `AK-47 \| Redline (FT)`: `currency:1` ~$39 range, `currency:8` ~¥6,200 range, `endpoint:search_render` ~$39 range — three internally consistent rows instead of one blended row | Re-queried the same item post-fix |
 
-**Not yet done (deliberately, per spec sequencing):** Snowflake external stage, streams,
-tasks, 24h unattended run. Pending Phase 1's soak test and Phase 4's stability, per
-CLAUDE.md §4.1.
+**Not yet done (deliberately, per the phase sequencing above):** Snowflake external stage,
+streams, tasks, 24h unattended run. Pending Phase 1's soak test and Phase 4's stability.
 
 ## Phase 4
 
@@ -96,9 +112,9 @@ CLAUDE.md §4.1.
 | `mypy --strict` on `ingest/` | 0 errors | `uv run mypy ingest`, 2026-08-21 |
 
 **Not yet done (deliberately):** DAG running unattended on a schedule for 72h.
-`airflow-scheduler` was never started as a persistent service this session — the DAG was
-run on-demand via `airflow dags test` against real data instead. Same honest gap as
-Phase 1's still-pending 24h soak test.
+`airflow-scheduler` was never started as a persistent service — the DAG was run on-demand
+via `airflow dags test` against real data instead. Same gap as Phase 1's still-pending 24h
+soak test.
 
 ## Phase 5
 
@@ -113,9 +129,9 @@ Phase 1's still-pending 24h soak test.
 
 **Not yet measured:** real hit/false-positive rates for price_zscore, spread_widening, and
 volume_spike — all three are mechanically correct (unit-tested against synthetic data
-with known-good outcomes) but haven't fired on real data yet, since this session's
-dataset doesn't span enough calendar time. Re-run once Phase 1's 24h+ soak test produces
-real continuous history.
+with known-good outcomes) but haven't fired on real data yet, since the current dataset
+doesn't span enough calendar time. Re-run once Phase 1's 24h+ soak test produces real
+continuous history.
 
 ## Phase 6
 
@@ -141,8 +157,8 @@ positive finding.
 ## Phase 7
 
 **Not measured: Snowflake query profiles / clustering-key tuning.** Snowflake was never
-reached this session (deferred since Phase 3, pending Phase 1's soak test and Phase 4's
-stability, both still open). DuckDB `EXPLAIN ANALYZE` used instead — see method column.
+reached (deferred since Phase 3, pending Phase 1's soak test and Phase 4's stability, both
+still open). DuckDB `EXPLAIN ANALYZE` used instead — see method column.
 Full run: `scripts/phase7_query_tuning.py`, output in `/tmp/phase7_tuning.log`.
 
 | Query | Before | After | Change | Method |

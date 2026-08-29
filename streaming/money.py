@@ -1,5 +1,5 @@
-"""Money-string parsing (CLAUDE.md Phase 2 step 4: "parse all money to integer minor
-units + currency code here, once").
+"""Money-string parsing. All money is parsed to integer minor units plus a currency
+code here, once.
 
 Deliberately narrow: only recognizes the currency display formats actually observed and
 verified in Phase 0 (docs/PHASE0_FINDINGS.md §3.7). An unrecognized currency code returns

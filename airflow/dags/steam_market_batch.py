@@ -1,10 +1,10 @@
-"""steam_market_batch — CLAUDE.md Phase 4 orchestration DAG.
+"""steam_market_batch — the orchestration DAG.
 
     wait_for_bronze  ->  copy_into_snowflake  ->  run_quality_gates  ->  dbt_seed
          ->  dbt_run_staging  ->  dbt_test_staging  (BLOCKING)
          ->  dbt_snapshot (needs stg_item_attributes from staging — see task-chain comment)
          ->  dbt_run_marts    ->  dbt_test_marts    (BLOCKING)
-         ->  detect_anomalies ->  publish_alerts
+         ->  detect_anomalies ->  sync_dashboard    ->  publish_alerts
 
 Runs inside the `airflow-scheduler`/`airflow-webserver` containers (docker-compose.yml),
 with the whole project mounted at /opt/project — same reasoning as running Spark in
@@ -13,18 +13,21 @@ how dbt/streaming already run.
 
 ## Deliberate simplifications, stated plainly (not hidden)
 
-- **`copy_into_snowflake` is a documented no-op this phase.** CLAUDE.md §4.1: don't open
-  the Snowflake trial until Phases 1 and 4 are stable — neither is yet (Phase 1's 24h
-  soak test hasn't completed). The task exists so the DAG's structure matches the spec,
-  and logs clearly that it's skipped rather than silently pretending to do something.
+- **`copy_into_snowflake` is a documented no-op this phase.** Snowflake is deliberately
+  deferred until the soak test and unattended-DAG gaps close (docs/DECISIONS.md) — Phase
+  1's 24h soak test hasn't completed. The task exists so the DAG's structure matches the
+  intended pipeline shape, and logs clearly that it's skipped rather than silently
+  pretending to do something.
 - **`wait_for_bronze` checks Bronze has *any* recent-ish data, rather than blocking with
   a real Airflow Sensor's poke/timeout semantics against a continuously-running
   scheduler.** `ingest/scheduler.py` isn't running unattended yet (same 24h-soak-test
   gap) — a true sensor waiting on continuous fresh partitions would just time out in this
   environment. Revisit once Phase 1's scheduler runs unattended.
-- **`detect_anomalies` is a stub.** Phase 5 ("Anomaly detection") hasn't been built yet —
-  this task exists so the DAG's shape is complete per the spec's diagram, and logs
-  explicitly that it's a placeholder rather than silently no-op-ing without saying so.
+- **`sync_dashboard` pushes gold marts (including the anomaly/FX marts) to Postgres for
+  Grafana** (analytics/export_to_grafana.py) — DuckDB stays the source of truth, Postgres
+  is a disposable, fully-rebuilt-every-run read cache Grafana can query with zero plugins.
+  Runs with `trigger_rule=TriggerRule.ALL_DONE` so a `detect_anomalies` failure doesn't
+  leave the dashboard stuck on stale data without at least the other marts refreshing.
 
 ## Gates that actually block
 
@@ -127,9 +130,9 @@ def _wait_for_bronze(**context) -> None:
 
 def _copy_into_snowflake(**context) -> None:
     logger.warning(
-        "copy_into_snowflake: SKIPPED. Snowflake trial deliberately not opened yet — "
-        "CLAUDE.md §4.1 requires Phases 1 and 4 to be stable first, and Phase 1's 24h "
-        "soak test hasn't completed. See docs/DECISIONS.md."
+        "copy_into_snowflake: SKIPPED. Snowflake is deliberately deferred until the soak "
+        "test and unattended-DAG gaps close. Phase 1's 24h soak test hasn't completed. "
+        "See docs/DECISIONS.md."
     )
 
 
@@ -165,11 +168,31 @@ def _run_quality_gates(**context) -> None:
 
 
 def _detect_anomalies(**context) -> None:
-    logger.warning(
-        "detect_anomalies: STUB. Phase 5 (z-score/EWMA/volume-spike/crossed-book anomaly "
-        "detection) hasn't been built yet — this task exists so the DAG's shape matches "
-        "the spec, not to claim anomaly detection is implemented."
-    )
+    """Runs the real Phase 5 detectors (analytics/anomaly.py) against the marts
+    dbt_run_marts/dbt_test_marts just built, and materializes main.mart_anomaly in the
+    same DuckDB warehouse. Uses DUCKDB_PATH from DBT_ENV, same convention dbt/the anomaly
+    module/this DAG all share (see profiles.yml's comment on why it must be absolute)."""
+    _ensure_project_on_path()
+    os.environ["DUCKDB_PATH"] = DBT_ENV["DUCKDB_PATH"]
+
+    from analytics.anomaly import main as run_anomaly_detection
+
+    run_anomaly_detection()
+
+
+def _sync_dashboard(**context) -> None:
+    """Pushes gold marts (dim_item, mart_item_daily, fct_orderbook_snapshot, mart_anomaly,
+    mart_cross_currency_dislocation) from DuckDB to postgres-marts for Grafana. See
+    analytics/export_to_grafana.py's module docstring for why Postgres, not a DuckDB
+    Grafana plugin."""
+    _ensure_project_on_path()
+    os.environ["DUCKDB_PATH"] = DBT_ENV["DUCKDB_PATH"]
+    os.environ.setdefault("GRAFANA_POSTGRES_URL", "postgresql+psycopg2://marts:marts@postgres-marts:5432/marts")
+    os.environ.setdefault("DASHBOARD_APP_IDS", "730")  # [CONFIG] CS2 by default
+
+    from analytics.export_to_grafana import main as sync_dashboard
+
+    sync_dashboard()
 
 
 def _publish_alerts(**context) -> None:
@@ -271,6 +294,12 @@ with DAG(
         python_callable=_detect_anomalies,
     )
 
+    sync_dashboard = PythonOperator(
+        task_id="sync_dashboard",
+        python_callable=_sync_dashboard,
+        trigger_rule=TriggerRule.ALL_DONE,  # refresh the other marts even if anomaly detection failed
+    )
+
     publish_alerts = PythonOperator(
         task_id="publish_alerts",
         python_callable=_publish_alerts,
@@ -292,5 +321,6 @@ with DAG(
         >> dbt_run_marts
         >> dbt_test_marts
         >> detect_anomalies
+        >> sync_dashboard
         >> publish_alerts
     )

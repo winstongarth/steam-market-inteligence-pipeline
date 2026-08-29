@@ -1,5 +1,5 @@
-EVIDENCE: dbt blocking gate failing on deliberately-injected bad data (CLAUDE.md Phase 4
-step 2 — "deliberately inject a bad batch, capture the DAG failing at the gate"). A
+EVIDENCE: dbt blocking gate failing on deliberately-injected bad data (Phase 4's gate-proof
+step — deliberately inject a bad batch, capture the DAG failing at the gate). A
 duplicate row was manually inserted into fct_price_observation (a real, existing row
 copied and re-inserted), then `dbt test --select
 assert_no_duplicate_grain_fct_price_observation` was run against the corrupted table.

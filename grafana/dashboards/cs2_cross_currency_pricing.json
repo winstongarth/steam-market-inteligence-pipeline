@@ -1,0 +1,169 @@
+{
+  "id": null,
+  "uid": "cs2-cross-currency-pricing",
+  "title": "CS2 — Cross-Currency Pricing",
+  "description": "FX-adjusted price gaps between non-USD listings and their nearest-in-time USD baseline (dbt mart_cross_currency_dislocation, ASOF-joined), synced from DuckDB via analytics/export_to_grafana.py.",
+  "tags": ["steam-market", "cs2", "cross-currency", "fx"],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "app_id",
+        "type": "query",
+        "label": "Game (app_id)",
+        "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+        "query": "SELECT DISTINCT app_id FROM dim_item ORDER BY 1",
+        "refresh": 2,
+        "current": { "text": "730", "value": "730" },
+        "includeAll": false,
+        "multi": false
+      },
+      {
+        "name": "iso_code",
+        "type": "query",
+        "label": "Currency",
+        "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+        "query": "SELECT DISTINCT iso_code FROM mart_cross_currency_dislocation WHERE app_id = $app_id ORDER BY 1",
+        "refresh": 2,
+        "current": { "text": "All", "value": "$__all" },
+        "includeAll": true,
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Currencies observed",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT iso_code) AS n FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Avg |FX gap| in range",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 5 },
+            { "color": "red", "value": 15 }
+          ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT avg(abs(pct_gap)) AS avg_abs_pct_gap FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Largest single dislocation",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT coalesce(max(abs(pct_gap)), 0) AS max_abs_pct_gap FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Last synced from DuckDB",
+      "type": "stat",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "dateTimeAsIso" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT max(synced_at) AS last_sync FROM mart_cross_currency_dislocation"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "FX gap vs. USD baseline, over time",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 5 },
+      "description": "Each point is one non-USD observation's % gap against the nearest-prior USD observation of the same item (ASOF join — see dbt/models/marts/mart_cross_currency_dislocation.sql). Near zero and centered around it, at this sample size, is the honest finding per README — not a bug.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": { "drawStyle": "points", "pointSize": 6, "showPoints": "always" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT observed_at AS time, pct_gap, market_hash_name || ' (' || iso_code || ')' AS metric FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at) ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Avg % gap by currency",
+      "type": "barchart",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 9, "w": 8, "x": 16, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT iso_code, avg(pct_gap) AS avg_pct_gap FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at) GROUP BY 1 ORDER BY 2 DESC"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Latest dislocation observations",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "steammarketmarts" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 14 },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "pct_gap" }, "properties": [{ "id": "unit", "value": "percent" }] }
+        ]
+      },
+      "options": { "sortBy": [{ "displayName": "observed_at", "desc": true }] },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT observed_at, market_hash_name, iso_code, local_price_major_units, rate_to_usd, usd_equivalent, usd_baseline_price, pct_gap FROM mart_cross_currency_dislocation WHERE app_id = $app_id AND iso_code IN ($iso_code) AND $__timeFilter(observed_at) ORDER BY observed_at DESC LIMIT 200"
+        }
+      ]
+    }
+  ]
+}

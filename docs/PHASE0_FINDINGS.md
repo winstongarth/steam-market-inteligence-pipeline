@@ -4,9 +4,9 @@ Recorded 2026-08-20. Single-IP, unauthenticated `httpx` client, User-Agent
 `steam-market-pipeline-recon/0.1 (personal research project; contact: winstonpatrickgarth@gmail.com)`.
 Raw fixtures in `tests/fixtures/`. Raw rate-limit log in `docs/PHASE0_RATELIMIT.json`.
 
-## Summary — what changed vs. the CLAUDE.md draft
+## Summary — what changed vs. the original assumptions
 
-| # | §  | Assumption in the spec | Measured reality |
+| # | §  | Assumption going in | Measured reality |
 |---|----|------------------------|-------------------|
 | 1 | 3.3 | Item listing page returns HTML containing an inline `Market_LoadOrderSpread(item_nameid)` script call | **Broken.** `/market/listings/{appid}/{hash_name}` now 302-redirects to a `/market/listings/{appid}/G{bucket_id}` page for every item tested (commodity and non-commodity alike). That page contains no `Market_LoadOrderSpread`, no `item_nameid`, no `nameid` substring anywhere in ~5MB of HTML. The old per-item `/render/` AJAX sub-path also redirects into the same bucket page rather than returning JSON. |
 | 2 | 3.1 | `count` param controls page size, "100 items per token", count>100 "typically rejected" | **Wrong.** `count=10`, `count=100`, and `count=150` all returned `pagesize: 10` / 10 results, unauthenticated. The breadth endpoint is capped at 10 items/request for us, not ~100 — the "100× more token-efficient" framing in §3.1 does not hold under these conditions. |
@@ -181,10 +181,10 @@ adaptive backoff need to hold regardless of whether this exact number drifts.
 
 - [x] Every endpoint in §3 hit at least once, response shape recorded, fixture saved.
 - [x] Rate limit measured (see above); production rate set to ≤40% of it.
-- [x] Currency codes verified; two were wrong and are corrected in §3.7 above and in
-      CLAUDE_4.md.
+- [x] Currency codes verified; two were wrong and are corrected in the currency table
+      above (§3.7).
 - [x] `pricehistory` login requirement confirmed (requires login → out of scope).
-- [ ] §3 of CLAUDE_4.md corrected — done for 3.1, 3.7; **3.2/3.3/3.5 cannot be corrected
+- [ ] §3 corrected above — done for 3.1, 3.7; **3.2/3.3/3.5 cannot be corrected
       yet** because the replacement mechanism for `item_nameid` resolution hasn't been found.
       This is a genuine open blocker, logged in `docs/DECISIONS.md`, not a rubber-stamped
       "exit."

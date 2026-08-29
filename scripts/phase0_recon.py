@@ -1,7 +1,7 @@
 """
 Phase 0 recon — throwaway script.
 
-Hits every endpoint in CLAUDE_4.md §3 exactly once, pretty-prints the response,
+Hits every endpoint in scope exactly once, pretty-prints the response,
 and saves it to tests/fixtures/. Also fetches robots.txt for compliance review.
 
 This is NOT production code. It exists to confirm reality (field names, types,

@@ -1,4 +1,4 @@
-"""Phase 2 — Streaming CDC and Silver normalization (CLAUDE.md Phase 2).
+"""Phase 2 — Streaming CDC and Silver normalization.
 
 Reads `market.raw.v1` (every poll response, verbatim), normalizes each endpoint's
 heterogeneous raw shape into one common per-item schema, holds last-known state per
@@ -21,9 +21,9 @@ attempt (`UnsatisfiedLinkError` in `NativeIO$Windows`). Running inside the Linux
 
 ## API substitution: flatMapGroupsWithState -> applyInPandasWithState
 
-CLAUDE.md's Phase 2 step 1 specifies `flatMapGroupsWithState`. That's a Scala/Java-only
-typed `Dataset` API — PySpark has never exposed it. `applyInPandasWithState` (Spark 3.4+)
-is the direct Python-facing equivalent: same `GroupState` execution engine underneath,
+The typed `flatMapGroupsWithState` API is Scala/Java-only; PySpark has never exposed it.
+`applyInPandasWithState` (Spark 3.4+) is the direct Python-facing equivalent: same
+`GroupState` execution engine underneath,
 same arbitrary-stateful-processing semantics, just a Pandas-UDF-shaped interface instead
 of a typed case class. Used here as a deliberate, documented substitution — not a shortcut
 around the requirement.
@@ -48,9 +48,8 @@ Raw envelopes are heterogeneous by *endpoint*, not just by *game*:
 | volume            | null                                     | `parse_volume_string(volume)` — a plain trade-count string, parsed separately from price fields so it's never wrongly scaled by 100 | null (`cBuyOrders`/`cSellOrders` are book-depth counts, not trade volume — deliberately not conflated) |
 | currency          | null (this endpoint doesn't take/return one) | `request_currency` (the envelope's own `currency` field, i.e. what we asked for — not reverse-inferred from the string, which is ambiguous for JPY vs CNY, see streaming/money.py) | `data.data.eCurrency` (server-inferred; not currently controllable — open question, docs/DECISIONS.md) |
 
-**Games-level normalization caveat, stated plainly (per CLAUDE.md's own "document each
-mapping decision" instruction):** CLAUDE.md's Phase 2 step 3 asks to unify CS2/Dota 2/
-TF2/Rust/PUBG's item taxonomies into one schema. Phase 0/1 only ever fetched real data for
+**Games-level normalization caveat, stated plainly:** The unified schema is meant to
+cover CS2/Dota 2/TF2/Rust/PUBG's item taxonomies. Phase 0/1 only ever fetched real data for
 CS2 (`appid=730`) — the other four app_ids were never sampled. This schema only relies on
 fields already confirmed present for CS2 (`hash_name`, `sell_price`, `sell_listings`), so
 it *should* generalize, but that is an assumption, not a verified fact. Flagged as an open
@@ -60,10 +59,10 @@ Phase 2 follow-up, not silently assumed away.
 
 `streaming/depth.py` implements and tests `spread`, `spread_bps`, and
 `depth_within_pct` (at any %, so 1/5/10% are just call-site choices) against real
-`orderbook` data. They are NOT wired into this job's watched-field set — CLAUDE.md's
-Phase 2 step 1 names exactly four watched fields (`lowest_sell`, `highest_buy`,
-`sell_listings`, `volume`); spread/depth are *derived* metrics the spec lists as a
-separate step, and they only apply to `orderbook`-sourced rows (the only endpoint with
+`orderbook` data. They are NOT wired into this job's watched-field set — the CDC job
+watches exactly four fields (`lowest_sell`, `highest_buy`, `sell_listings`, `volume`);
+spread/depth are *derived* metrics handled as a separate step, and they only apply to
+`orderbook`-sourced rows (the only endpoint with
 full order-book arrays). Folding 8 more derived fields into the CDC diff set now would
 blur that scope. They're ready to compute in Phase 3's Gold layer (`mart_item_daily`)
 directly from Silver's `orderbook` rows, which is where they belong architecturally.

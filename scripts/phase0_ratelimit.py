@@ -5,7 +5,7 @@ Ramps request rate against the cheapest endpoint (priceoverview, single item)
 in discrete steps until the first 429, then STOPS IMMEDIATELY and measures
 recovery time by polling with backoff, capped so this run stays bounded.
 
-Per CLAUDE_4.md §2.3/§2.5: we do not hammer through a 429, we do not retry
+Rules this respects: we do not hammer through a 429, we do not retry
 tightly, and we log every 429 as a first-class event.
 
 Run: uv run python scripts/phase0_ratelimit.py

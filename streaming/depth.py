@@ -1,4 +1,4 @@
-"""Spread and order-book depth calculations (CLAUDE.md Phase 2 step 5).
+"""Spread and order-book depth calculations.
 
 Pure functions, no Spark dependency — testable directly, wrapped as UDFs in cdc_job.py
 where needed. Depth-at-X%-from-mid only applies to orderbook-sourced records, since only

@@ -2,7 +2,7 @@
 
 Real rates from Frankfurter (https://frankfurter.dev), a free, no-key, ECB-sourced FX API
 — chosen over a paid provider since the whole project's ethos is primary/free data
-sources (CLAUDE.md §3: "not from paid aggregators"). Cached on disk like
+sources — this project uses primary sources, not paid aggregators. Cached on disk like
 ingest/nameid_resolver.py's cache — fetch once, never re-fetch the same date.
 
 Note (found while fetching, 2026-08-21): the ECB doesn't publish same-day rates —

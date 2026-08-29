@@ -1,5 +1,5 @@
--- Order-book depth measures (CLAUDE.md Phase 2/3: spread, spread_bps, depth at 1/5/10%
--- from mid). Only orderbook rows carry the full compact arrays needed for this — see
+-- Order-book depth measures: spread, spread_bps, depth at 1/5/10% from mid. Only
+-- orderbook rows carry the full compact arrays needed for this — see
 -- streaming/depth.py and dbt/macros/depth_within_pct.sql (same math, ported to SQL for
 -- the warehouse-side path; see cdc_job.py's module docstring for why streaming and dbt
 -- independently derive from the same Bronze data).

@@ -1,6 +1,6 @@
 {#
-  SCD Type 2 for item identity (CLAUDE.md Phase 3: "dim_item — SCD Type 2, tracking
-  name/type/rarity changes over time"). `check` strategy on item_name/item_type/
+  SCD Type 2 for item identity — dim_item, tracking name/type/rarity changes over time.
+  `check` strategy on item_name/item_type/
   rarity_color: a new dbt_valid_from/dbt_valid_to row pair is written whenever any of
   those change for a given (app_id, market_hash_name).
 

@@ -1,4 +1,4 @@
-"""Token bucket + adaptive backoff + circuit breaker, per CLAUDE.md §2 and §7.1.1.
+"""Token bucket + adaptive backoff + circuit breaker.
 
 Non-negotiable rules this module enforces (§2):
 - Single well-behaved client: a global token bucket caps sustained request rate.

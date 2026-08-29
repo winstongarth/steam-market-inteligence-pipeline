@@ -1,5 +1,5 @@
 EVIDENCE: full steam_market_batch DAG run, all 11 tasks green, against real data
-(CLAUDE.md Phase 4). `airflow dags test steam_market_batch 2026-08-21` inside the
+(Phase 4 exit criterion). `airflow dags test steam_market_batch 2026-08-21` inside the
 airflow-webserver container, after several real bugs found and fixed along the way (see
 docs/DECISIONS.md): a sys.path/PYTHONPATH issue specific to Airflow's task execution
 model, this dbt version's --project-dir/--profiles-dir being subcommand options rather

@@ -1,4 +1,4 @@
-"""Great Expectations suite for raw Bronze data (CLAUDE.md Phase 4: schema drift, freshness).
+"""Great Expectations suite for raw Bronze data (schema drift + freshness).
 
 Runs BEFORE any dbt transform, per the DAG's step order (run_quality_gates ->
 dbt_run_staging -> ...) — these are checks on the raw envelope shape and recency, not on

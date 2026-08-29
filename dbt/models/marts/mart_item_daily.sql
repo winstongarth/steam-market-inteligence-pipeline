@@ -1,4 +1,4 @@
--- OHLC + volume + time-weighted average spread (CLAUDE.md Phase 3).
+-- OHLC + volume + time-weighted average spread.
 --
 -- Money-domain-partitioned (bug found and fixed here too, docs/DECISIONS.md — the same
 -- class of bug as the CDC job's, see "CDC job: money-domain bug, found and fixed twice"):

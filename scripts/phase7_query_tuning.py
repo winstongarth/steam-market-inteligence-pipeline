@@ -4,13 +4,13 @@ No Snowflake query profiles here: the Snowflake trial was deliberately deferred 
 docs/DECISIONS.md, Phase 3/4) pending Phase 1's soak test and Phase 4's stability, neither
 of which happened this session. DuckDB's own EXPLAIN ANALYZE is the honest substitute —
 same diagnostic questions (scan volume, join fan-out, redundant scans), same fix
-categories the spec asks for (pre-aggregation, rewrite), minus the one technique that's
+categories worth checking (pre-aggregation, rewrite), minus the one technique that's
 Snowflake-specific and doesn't map onto DuckDB at all: clustering keys. DuckDB tables here
 aren't micro-partitioned, so "add a clustering key" isn't an available lever — noted
 plainly in docs/METRICS.md rather than faked.
 
 Also note: this session's real dataset is small (thousands of rows, not the 30-day/
-production scale the spec assumes), so wall-clock time differences between a naive and a
+production scale assumed going in), so wall-clock time differences between a naive and a
 tuned query are often sub-millisecond either way. Where that's true, the real, scale-
 independent signal is operator shape and rows-scanned/produced from EXPLAIN ANALYZE, not
 wall time — recorded as such, not dressed up as a dramatic speedup that didn't happen.

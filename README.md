@@ -1,21 +1,46 @@
 # Steam Market Intelligence Pipeline
 
-A streaming data platform built over the Steam Community Market's real (undocumented)
-API, from a single well-behaved IP, with no third-party aggregators involved. It ingests
-market data, streams change-data-capture events through Kafka/Spark, lands a
-Bronze/Silver/Gold warehouse in DuckDB via dbt, orchestrates the whole thing with
-Airflow behind blocking data-quality gates, and runs anomaly detection and a
-cross-currency pricing analysis on top.
+A streaming data platform built over the Steam Community Market's real (undocumented) API,
+from a single well-behaved IP, with no third-party aggregators involved. It ingests market
+data, streams change-data-capture events through Kafka/Spark, lands a Bronze/Silver/Gold
+warehouse in DuckDB via dbt, orchestrates the whole thing with Airflow behind blocking
+data-quality gates, runs anomaly detection and a cross-currency pricing analysis on top, and
+mirrors the results to a Grafana dashboard.
 
-This project follows one non-negotiable rule throughout: **every number in this README
-and in `docs/METRICS.md` is measured, dated, and traceable to a command or a saved log —
-never estimated.** Where something wasn't measured, it says so, in the same place a real
-number would go. `docs/DECISIONS.md` has the full ADR-style log, including every real bug
-found, how it was diagnosed, and what was rejected along the way.
+Every number in this README and in [`docs/METRICS.md`](docs/METRICS.md) is measured, dated,
+and traceable to a command or a saved log — never estimated. Where something wasn't
+measured, it says so, in the same place a real number would go.
 
----
+- [01 · What this is](#01--what-this-is)
+- [02 · Architecture](#02--architecture)
+- [03 · Data sources](#03--data-sources)
+- [04 · Tech stack](#04--tech-stack)
+- [05 · Data model](#05--data-model)
+- [06 · Repo structure](#06--repo-structure)
 
-## Architecture
+## 01 · What this is
+
+The warehouse exists to answer four questions about the Steam Community Market, each backed
+by its own table:
+
+| Question | Answered by |
+|---|---|
+| What's the current price and spread for an item? | `mart_item_daily`, `fct_orderbook_snapshot` |
+| How has an item's price moved, and does it look anomalous? | `fct_price_change`, `mart_anomaly` |
+| Is the order book internally consistent (crossed, thin, deep)? | `fct_orderbook_snapshot` |
+| Does the same item price differently once currency is controlled for? | `mart_cross_currency_dislocation` |
+
+The order-book endpoint is the project's differentiator. The documented resolution path
+(`item_nameid` scraped out of an item's listing page) is dead — Valve's SPA now redirects
+every listing page into a bucket view with none of the old markers present. Rather than
+guess at a replacement, the SPA's own code-split JS chunks were downloaded and read
+statically, which surfaced the real mechanism: a small query-action RPC
+(`/market/orderbook?q=Load&qp=[app_id, market_bucket_id]`) keyed by a `market_bucket_id`
+that's free to obtain for commodity items (already present in `search/render` results) and
+costs one request per item family for wear-variant skins (embedded in the bucket page's
+inline JSON). See [`docs/DECISIONS.md`](docs/DECISIONS.md) for the full trace.
+
+## 02 · Architecture
 
 ```mermaid
 flowchart LR
@@ -50,7 +75,13 @@ flowchart LR
         GATE[Great Expectations<br/>Bronze quality gate]
         DBT[dbt run / test / snapshot]
         ANOM[analytics/anomaly.py]
+        SYNC[analytics/export_to_grafana.py]
         ALERT[quality/alerting.py]
+    end
+
+    subgraph Dashboard["Dashboard layer"]
+        PGM[(postgres-marts<br/>full-refresh mirror)]
+        GRAF[Grafana<br/>CS2 anomaly + cross-currency dashboards]
     end
 
     API -->|rate-limited GET| CL --> RL
@@ -62,33 +93,78 @@ flowchart LR
     SV --> STG
     BZ --> GATE --> DBT --> MART
     MART --> ANOM --> ALERT
+    ANOM --> SYNC
+    MART --> SYNC --> PGM --> GRAF
 ```
 
-**Why Kafka for this volume?** Honestly, mostly decoupling and replay, not throughput —
-this volume (single IP, sub-1 req/s) doesn't need Kafka's scale. The real justification:
-consumer independence (Bronze writer and the Spark CDC job both read `market.raw.v1`
-independently, at their own pace, without coordinating with the poller), and replay
-(Bronze can be rebuilt from the topic without re-hitting Steam). At this data volume,
-that's somewhat over-engineered for the throughput alone — worth saying plainly rather
-than pretending it was throughput-driven.
+**Why Kafka for this volume?** Mostly decoupling and replay, not throughput — at a single
+IP polling sub-1 req/s, Kafka's scale headroom goes unused. The real justification:
+consumer independence (the Bronze writer and the Spark CDC job both read `market.raw.v1`
+independently, at their own pace, without coordinating with the poller), and replay (Bronze
+can be rebuilt from the topic without re-hitting Steam). At this data volume that's
+over-engineered for throughput alone, which is worth being upfront about.
 
-**Is this actually streaming, or a cron job with extra steps?** The *source* is
-poll-based — Steam has no push/webhook mechanism, so there's no way around periodic
-snapshots at the ingestion edge. What's real streaming is everything downstream of that:
-Kafka decouples producer/consumer, and `cdc_job.py` treats each snapshot as an event in a
-Spark Structured Streaming job with `applyInPandasWithState`, diffing against
-per-key state rather than batch-diffing whole tables. The honest name for this pattern is
-"CDC over periodic snapshots," not "true event streaming" — Phase 2 in `docs/DECISIONS.md`
-covers this in more depth (`Change events emitted` in `docs/METRICS.md` Phase 2).
+**Is this actually streaming, or a cron job with extra steps?** The *source* is poll-based
+— Steam has no push/webhook mechanism, so there's no way around periodic snapshots at the
+ingestion edge. What's real streaming is everything downstream of that: Kafka decouples
+producer/consumer, and `cdc_job.py` treats each snapshot as an event in a Spark Structured
+Streaming job with `applyInPandasWithState`, diffing against per-key state rather than
+batch-diffing whole tables. The accurate name for this pattern is "CDC over periodic
+snapshots," not "true event streaming" — see `docs/DECISIONS.md` (Phase 2) and the `Change
+events emitted` row in `docs/METRICS.md` (Phase 2).
 
-## dbt lineage (real `ref()` graph, not a rendered screenshot)
+## 03 · Data sources
 
-No browser was available in this environment to capture an actual `dbt docs generate` /
-`dbt docs serve` screenshot — stated plainly rather than faked. This diagram is generated
-directly from the real `ref()`/`source()` calls in every model file (see the graph
-extraction in this README's own history if you want to regenerate it: `grep -oE
-"ref\('[a-zA-Z0-9_]+'\)"` across `dbt/models/**/*.sql`), so it's accurate to the actual
-project, just not a pixel-for-pixel UI capture.
+| Endpoint | Role | Status | What was found |
+|---|---|---|---|
+| `search/render` | Catalog breadth sweep | Live | Page size is hard-capped at 10 items/request regardless of the requested `count` — a full CS2 sweep is ~3,535 requests, not the ~354 originally assumed. |
+| `priceoverview` | Point price (lowest/median/volume) | Live | Matches expected shape. Prices are locale-formatted strings (`$`, `£`, `¥`, `Rp`, etc.) requiring currency-aware parsing. |
+| `orderbook` (`?q=Load&qp=[...]`) | Order-book depth | Rediscovered | The documented `itemordershistogram` path is dead; this RPC, traced from the SPA's own JS bundles, replaces it entirely. See §01. |
+| `itemordershistogram` | Order-book depth (legacy) | Dead | `item_nameid` resolution (scraped from listing-page HTML) no longer works — every listing page now redirects into a bucket view with no `item_nameid` present anywhere. |
+| `itemordersactivity` | Order-book activity feed | Out of scope | Not exercised — no modern replacement was found during the `orderbook` investigation, and it's optional in scope either way. |
+| `pricehistory` | Historical price series | Out of scope | Requires an authenticated session (HTTP 400 without one); logging in is out of scope for this project. |
+
+**Currency codes**, cross-checked against real price-string formatting rather than assumed:
+`10` → IDR, `13` → SGD (two codes that are commonly assumed to be reversed). `1`/`2`/`3`
+(USD/GBP/EUR) confirmed correct. Full table in `docs/PHASE0_FINDINGS.md` §3.7.
+
+**Rate-limit policy:** measured break point is ~2 req/s sustained (first 429 at request
+#21 in a ramped test); production rate is set to **0.5 req/s**, one global token bucket
+shared across all polling tiers so no tier can individually stay compliant while the sum
+exceeds the measured limit. A circuit breaker halts all traffic on sustained 429s and has
+tripped for real once, under real load, recovering correctly. Every fetched page/PDF is
+cached locally and never re-fetched for the same filing/observation. Full methodology:
+`docs/PHASE0_FINDINGS.md`.
+
+## 04 · Tech stack
+
+| Layer | Tool | Why | Where |
+|---|---|---|---|
+| Ingestion | `httpx` + Pydantic | Typed, async-friendly HTTP client with schema validation on every response | `ingest/` |
+| Streaming transport | Kafka (Redpanda) | Decouples producer/consumer and enables replay without re-hitting Steam — see §02 | `docker-compose.yml`, `ingest/kafka_producer.py` |
+| Stream processing | Spark Structured Streaming | `applyInPandasWithState` gives per-key CDC state without hand-rolling a state store | `streaming/cdc_job.py` |
+| Lake storage | MinIO (S3-compatible) | Local, zero-cost S3 semantics for Bronze/Silver Parquet | `docker-compose.yml` |
+| Warehouse | DuckDB + dbt | See rejection below (vs. Snowflake) | `dbt/` |
+| Orchestration | Airflow (Docker, LocalExecutor) | Blocking quality gates between layers, a real scheduler UI, industry-standard DAG semantics | `airflow/dags/` |
+| Data quality | Great Expectations (Bronze) + dbt tests (modeled layers) | GX suits raw-layer schema/freshness checks; dbt's own test framework is the natural fit once data is modeled — avoids duplicate-logic drift between the two | `quality/expectations/`, `dbt/tests/` |
+| Dashboard | Postgres (`postgres-marts`) + Grafana | See rejection below (vs. an unsigned DuckDB plugin) | `analytics/export_to_grafana.py`, `grafana/` |
+| Testing | pytest + `mypy --strict` | Fixture-based, never hits the live Steam API | `tests/` |
+
+**Rejected: an unsigned community DuckDB plugin for Grafana.** Grafana has no first-party
+DuckDB datasource. Rather than install an unsigned plugin (extra install/signing friction,
+less predictable offline), `analytics/export_to_grafana.py` does a full-refresh sync of the
+gold marts into `postgres-marts`, a disposable Postgres container Grafana talks to natively
+with zero plugins — the same reasoning already used for `postgres-airflow`, just serving
+warehouse data instead of orchestration metadata. DuckDB stays the single source of truth.
+
+**Rejected: Snowflake.** Deliberately deferred — see `docs/DECISIONS.md` — pending a 24h
+unattended soak test and a 72h unattended-DAG run, neither of which has happened yet.
+DuckDB carries the whole warehouse layer instead, which is also why query tuning
+(`docs/METRICS.md`, Phase 7) used `EXPLAIN ANALYZE` rather than Snowflake query profiles,
+and why "add a clustering key" isn't in this project's fix list — DuckDB tables aren't
+micro-partitioned the way Snowflake's are, so that fix category doesn't transfer.
+
+## 05 · Data model
 
 ```mermaid
 flowchart TB
@@ -149,146 +225,89 @@ flowchart TB
     fct_ob_snap --> mart_daily
 ```
 
-## Quality gate, demonstrated failing (real evidence, not a description of intent)
+Generated directly from the real `ref()`/`source()` calls in every model file, so it's
+accurate to the actual project rather than a point-in-time screenshot.
 
-CLAUDE.md's Phase 4 exit criterion required *proving* the blocking gates actually block,
-with saved evidence — not just building them and trusting they would. Both gate layers
-were tested against deliberately injected bad data. Full saved output:
-`docs/PHASE4_GATE_FAILURE_EVIDENCE.txt` (Great Expectations, 3 injected failure modes) and
-`docs/PHASE4_GATE_FAILURE_EVIDENCE_dbt.txt` (a real dbt test, real exit code 1). Excerpt:
+**Layer rules**, enforced by convention and by `dbt_project.yml`'s materialization config:
 
-```
-=== Test 3: null app_id injected ===
-Bronze quality gate FAILED: 14/15 expectations passed (freshness SLA=25.0h).
-Failed expectations: ['expect_column_values_to_not_be_null']
-success: False | failed: ['expect_column_values_to_not_be_null']
-```
+| Layer | Materialization | Responsibility |
+|---|---|---|
+| `staging/` | View | 1:1 with a Bronze/Silver source, light typing/renaming only — no joins, no business logic |
+| `intermediate/` | View | Identity resolution and derived fields (money parsing, spread/depth math, FX conversion) — the layer where cross-endpoint joins happen |
+| `marts/` | Table | Final, queried-by-consumers grain — materialized for the ~196× read-speed difference measured in `docs/METRICS.md` (Phase 7) |
 
-```
-1 of 1 START test assert_no_duplicate_grain_fct_price_observation .............. [RUN]
-1 of 1 FAIL 1 assert_no_duplicate_grain_fct_price_observation .................. [FAIL 1 in 0.03s]
-...
-Completed with 1 error, 0 partial successes, and 0 warnings
-```
+**Mart grain:**
 
-Both times, the corrupted state was restored (`dbt run`) immediately after capturing the
-failure — this repo's warehouse reflects real, uncorrupted data.
-
-## Headline metrics
-
-Full detail with methodology for every number: [`docs/METRICS.md`](docs/METRICS.md).
-
-| | |
+| Table | Grain |
 |---|---|
-| Measured rate-limit break point | ~2 req/s; production rate set to 0.5 req/s (25% margin) |
-| Circuit breaker | Tripped for real once, under real sustained load (Phase 6) — halted correctly, was not evaded |
-| Real bugs found and fixed across the project | 3 separate "money-domain" mixing bugs (CDC, OHLC, FX join) + 1 dbt CSV NULL-parsing bug + 1 NULL-join correctness bug (Phase 7) + 5 Airflow/dbt-CLI mechanics bugs |
-| dbt models | 14 (7 staging/intermediate views, 7 mart/fact/snapshot) |
-| dbt tests | 26 (23 pass, 3 `severity=warn` by design, 0 error) |
-| Full pytest suite | 81/81 passing |
-| `mypy --strict` on `ingest/` | 0 errors |
-| Airflow DAG | 11/11 tasks succeeded on a real, on-demand run against real data |
-| Anomaly detection | 25 hand-verified `crossed_book` anomalies (3/3 spot-checked against raw Bronze JSON, 0 false positives in that sample); z-score/spread/volume detectors mechanically correct but never fired — this session's dataset doesn't span enough calendar time |
-| Cross-currency FX analysis (n=50 items) | No persistent structural pricing gap found — apparent gaps track item price (rounding noise), not currency, once the full sample is measured |
-| Query tuning (Phase 7) | Materialized-table vs. view: ~196× faster; window function vs. correlated subquery: ~43% faster; self-join vs. `QUALIFY`: found and fixed a real correctness bug (`NULL = NULL`) |
+| `dim_item` | One current row per item (SCD Type 2 on attribute change) |
+| `fct_price_observation` | One row per raw price observation (any endpoint) |
+| `fct_orderbook_snapshot` | One row per order-book poll |
+| `fct_price_change` | One row per detected CDC change event |
+| `mart_item_daily` | item × day × `money_domain` (OHLC + time-weighted spread) |
+| `mart_cross_currency_dislocation` | One row per non-USD observation, ASOF-joined to its nearest-prior USD baseline |
+| `mart_anomaly` | One row per detected anomaly — written directly by `analytics/anomaly.py`, not a dbt model |
 
-## Known gaps — stated plainly, not hidden
+**Money and depth math are deliberately implemented twice** — once in Python
+(`streaming/money.py`, `streaming/depth.py`) for the streaming path, once in SQL
+(`dbt/macros/parse_price.sql`, `int_orderbook_normalized.sql`) for the batch path. This is
+normal medallion-architecture duplication, not an oversight: streaming and dbt are
+independent consumers of the same Bronze data with different freshness/latency needs. The
+tradeoff is real, though — the same class of bug (mixing incompatible currencies together,
+the recurring "money-domain" bug documented in `docs/DECISIONS.md`) had to be found and
+fixed independently on both sides.
 
-This was built in a single working session, not over 30 days. Per this project's own
-honesty rule, these are the exit criteria that are **not** met, and why:
-
-- **Phase 1's 24h zero-429 soak test never ran.** Everything downstream that would
-  benefit from continuous steady-cadence data (CDC compression ratio, anomaly detector
-  hit rates, Bronze partition growth) is measured against a short, disconnected ad-hoc
-  session instead, and flagged as such wherever it appears in `docs/METRICS.md`.
-- **Airflow's DAG was never run unattended on a schedule for 72h** — `airflow-scheduler`
-  was never started as a persistent service; the DAG was proven correct via `airflow dags
-  test` against real data instead.
-- **Snowflake was never opened.** Deliberately deferred (see `docs/DECISIONS.md`, Phase
-  3) pending the two gaps above — DuckDB was used for the whole warehouse layer instead,
-  which is also why Phase 7's query tuning used `EXPLAIN ANALYZE` instead of Snowflake
-  query profiles, and why "add a clustering key" isn't in this project's fix list (DuckDB
-  has no clustering-key equivalent).
-- **No dbt-docs / Airflow-UI screenshots** — no browser was available in this
-  environment. Where the spec asked for a screenshot, this README either quotes the real
-  terminal evidence directly or generates an equivalent diagram from the real source
-  files, and says so rather than presenting a description as if it were an image.
-
-## What I'd do differently at scale
-
-- **Materialize more aggressively, sooner.** Phase 7's single most dramatic measured
-  result wasn't a clever join rewrite — it was the ~196× gap between a view stacked on
-  live S3 reads and a materialized table. At real production volume, every intermediate
-  model that gets queried more than once during a batch run should probably be a table,
-  not a view; this project's `+materialized: view` default for staging/intermediate was
-  the right call for iteration speed while this was actively being built, and the wrong
-  call for a production query path.
-- **A real per-request-identity rate limit, not a global one.** The current design uses
-  one global token bucket shared across all tiers (per `docs/DECISIONS.md`, deliberately,
-  to avoid Tier A + Tier B/C jointly exceeding the measured limit even if each
-  individually respects it). That's correct for a single IP, but doesn't extend cleanly
-  to a multi-worker or multi-IP setup — a distributed rate limiter (e.g., Redis-backed
-  token bucket) would be the real fix, not something this project needed to build for a
-  single-IP scope.
-- **Idempotent, replayable CDC state**, not just crash-safe writers. `bronze_writer.py`
-  and `silver_writer.py` are already crash-safe (`enable_auto_commit=False`, commit after
-  flush — a real bug caught and fixed this session), but `cdc_job.py`'s per-key state
-  store is in-memory for this project's scope. At real scale, that state needs to survive
-  a Spark job restart without reprocessing the entire topic from the beginning —
-  Structured Streaming's checkpointing does this, but it wasn't exercised end-to-end here
-  (no long-running restart was ever tested).
-- **A currency/domain type, not a string convention.** The money-domain bug (found and
-  fixed three separate times — CDC, OHLC, the FX join — before it stopped recurring) is
-  the clearest single lesson from this project: an implicit invariant ("never compare
-  prices across currencies") that isn't enforced by the type system will eventually get
-  violated by a new code path that doesn't know about the convention. At scale, this
-  should be a real type (a `Money` value object carrying its currency, refusing to
-  compare/add across currencies at the language level) rather than a `money_domain`
-  string that every new query has to remember to filter on — Phase 7's Q3 finding (a
-  `NULL`-currency equi-join silently dropping rows) is the same root cause wearing a
-  different SQL-semantics mask.
-- **Multi-IP / longer time horizon before trusting a single rate-limit measurement.**
-  Phase 0's single ramp-test measurement (~2 req/s break point) turned out not to be
-  fully representative — the circuit breaker tripped for real in Phase 6 under a longer,
-  denser burst at a rate that had been running safely for hours elsewhere in the project.
-  At real scale this argues for continuous adaptive rate-limiting (back off automatically
-  based on live 429 rate, not a single historical measurement) rather than one static
-  configured number, however conservatively chosen.
-
-## Repo layout
+## 06 · Repo structure
 
 ```
 ingest/           HTTP client, rate limiter + circuit breaker, endpoint parsers, scheduler
 streaming/        Spark CDC job, money/depth math, Bronze + Silver Kafka writers
 dbt/              seeds, staging/intermediate/marts, snapshots, singular tests
-analytics/        anomaly detection (z-score, EWMA spread, volume-spike, crossed-book)
+analytics/        anomaly detection (z-score, EWMA spread, volume-spike, crossed-book);
+                  export_to_grafana.py syncs gold marts to the dashboard's Postgres
 quality/          Great Expectations Bronze suite, alerting, webhook receiver
 airflow/dags/     the orchestration DAG
+grafana/          provisioned datasource + the two CS2 dashboards (anomaly detection,
+                  cross-currency pricing)
 scripts/          one-off phase scripts (recon, soak tests, FX watchlist poll, query tuning)
 tests/            pytest suite — unit + fixture-based, never hits the live Steam API
-docs/             DECISIONS.md (full ADR log), METRICS.md (every measured number)
+docs/             decision log, measured metrics, findings, and the setup runbook
 ```
 
-## Running it
+| `ingest/` | Purpose |
+|---|---|
+| `client.py` | `SteamMarketClient` — the single HTTP entry point, wraps rate limiting and response validation |
+| `ratelimit.py` | Token-bucket rate limiter + circuit breaker |
+| `scheduler.py` | `TieredScheduler` — tiered polling cadence across endpoints |
+| `nameid_resolver.py` | Resolves `market_bucket_id` for commodity and wear-variant items (see §01) |
+| `fx_rates.py` | Daily FX rates from Frankfurter (ECB-sourced, free, no key) |
+| `schemas.py` | Pydantic response schemas per endpoint |
+| `kafka_producer.py` | Publishes raw observations to `market.raw.v1` |
+| `endpoints/` | Per-endpoint request/parse logic (`search_render`, `priceoverview`, `orderbook`, `itemordersactivity`) |
 
-```bash
-docker compose up -d
-docker exec steam-redpanda rpk topic create market.raw.v1 market.changes.v1
+| `streaming/` | Purpose |
+|---|---|
+| `cdc_job.py` | Spark Structured Streaming CDC job — diffs `market.raw.v1` into `market.changes.v1` |
+| `money.py` | Currency-aware price parsing and money-domain handling |
+| `depth.py` | Order-book spread/depth calculations |
+| `bronze_writer.py`, `silver_writer.py` | Kafka consumers writing partitioned Parquet to MinIO |
 
-uv run python -m ingest.scheduler          # poller -> Kafka
-uv run python -m streaming.bronze_writer   # Kafka -> Bronze (Parquet on MinIO)
-# Spark CDC job runs inside the spark container — see docs/DECISIONS.md for the spark-submit invocation
+| `dbt/` | Purpose |
+|---|---|
+| `models/staging/` | 1:1 views over Bronze/Silver sources |
+| `models/intermediate/` | Identity resolution, money parsing, FX conversion |
+| `models/marts/` | Final fact/dim/mart tables |
+| `snapshots/` | `dim_item_snapshot` — SCD Type 2 |
+| `tests/` | Singular data-quality tests (`assert_*.sql`) |
+| `seeds/` | Reference data: currencies, FX rates, the item-bucket map |
 
-cd dbt && dbt seed && dbt run && dbt snapshot && dbt test
-uv run python -m analytics.anomaly
-```
-
-Full test suite: `uv run pytest -q`. Type checking: `uv run mypy ingest` (strict) and
-`uv run mypy streaming analytics --ignore-missing-imports`.
+Full command sequences, service URLs, and config reference: **[`docs/RUNBOOK.md`](docs/RUNBOOK.md)**.
+Measured results: **[`docs/METRICS.md`](docs/METRICS.md)**. Decision log, every real bug
+found and how it was diagnosed: **[`docs/DECISIONS.md`](docs/DECISIONS.md)**.
 
 ---
 
-Built against Steam's real Community Market API directly — no paid aggregators
-(Capitol-Trades-style repackagers) involved, per this project's own scraping-etiquette
-rule: cache everything, rate-limit conservatively, respect a real circuit breaker, never
-commit scraped data (`data/` is gitignored throughout).
+Built against Steam's real Community Market API directly — no paid aggregators involved —
+per this project's own scraping-etiquette policy (§03): cache everything, rate-limit
+conservatively, respect a real circuit breaker, never commit scraped data (`data/` is
+gitignored throughout).
