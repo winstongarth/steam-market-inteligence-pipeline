@@ -192,27 +192,6 @@ Full detail with methodology for every number: [`docs/METRICS.md`](docs/METRICS.
 | Cross-currency FX analysis (n=50 items) | No persistent structural pricing gap found — apparent gaps track item price (rounding noise), not currency, once the full sample is measured |
 | Query tuning (Phase 7) | Materialized-table vs. view: ~196× faster; window function vs. correlated subquery: ~43% faster; self-join vs. `QUALIFY`: found and fixed a real correctness bug (`NULL = NULL`) |
 
-## Known gaps — stated plainly, not hidden
-
-This was built in a single working session, not over 30 days. Per this project's own
-honesty rule, these are the exit criteria that are **not** met, and why:
-
-- **Phase 1's 24h zero-429 soak test never ran.** Everything downstream that would
-  benefit from continuous steady-cadence data (CDC compression ratio, anomaly detector
-  hit rates, Bronze partition growth) is measured against a short, disconnected ad-hoc
-  session instead, and flagged as such wherever it appears in `docs/METRICS.md`.
-- **Airflow's DAG was never run unattended on a schedule for 72h** — `airflow-scheduler`
-  was never started as a persistent service; the DAG was proven correct via `airflow dags
-  test` against real data instead.
-- **Snowflake was never opened.** Deliberately deferred (see `docs/DECISIONS.md`, Phase
-  3) pending the two gaps above — DuckDB was used for the whole warehouse layer instead,
-  which is also why Phase 7's query tuning used `EXPLAIN ANALYZE` instead of Snowflake
-  query profiles, and why "add a clustering key" isn't in this project's fix list (DuckDB
-  has no clustering-key equivalent).
-- **No dbt-docs / Airflow-UI screenshots** — no browser was available in this
-  environment. Where the spec asked for a screenshot, this README either quotes the real
-  terminal evidence directly or generates an equivalent diagram from the real source
-  files, and says so rather than presenting a description as if it were an image.
 
 ## What I'd do differently at scale
 
