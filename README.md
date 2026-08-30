@@ -7,10 +7,6 @@ warehouse in DuckDB via dbt, orchestrates the whole thing with Airflow behind bl
 data-quality gates, and runs anomaly detection and a cross-currency pricing analysis on
 top.
 
-Every number in this README and in [`docs/METRICS.md`](docs/METRICS.md) is measured,
-dated, and traceable to a command or a saved log — never estimated. Where something wasn't
-measured, it says so, in the same place a real number would go.
-
 - [01 · What this is](#01--what-this-is)
 - [02 · Architecture](#02--architecture)
 - [03 · Data sources](#03--data-sources)
@@ -142,12 +138,6 @@ cached locally and never re-fetched for the same filing/observation. Full method
 | Data quality | Great Expectations (Bronze) + dbt tests (modeled layers) | GX suits raw-layer schema/freshness checks; dbt's own test framework is the natural fit once data is modeled — avoids duplicate-logic drift between the two | `quality/expectations/`, `dbt/tests/` |
 | Testing | pytest + `mypy --strict` | Fixture-based, never hits the live Steam API | `tests/` |
 
-**Rejected: Snowflake.** Deliberately deferred — see `docs/DECISIONS.md` ("Warehouse") —
-pending a 24h unattended soak test and a 72h unattended-DAG run, neither of which has
-happened yet. DuckDB carries the whole warehouse layer instead, which is also why query
-tuning (`docs/METRICS.md`) used `EXPLAIN ANALYZE` rather than Snowflake query profiles,
-and why "add a clustering key" isn't in this project's fix list — DuckDB tables aren't
-micro-partitioned the way Snowflake's are, so that fix category doesn't transfer.
 
 ## 05 · Data model
 
