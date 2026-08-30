@@ -1,8 +1,8 @@
-"""Great Expectations suite for raw Bronze data (CLAUDE.md Phase 4: schema drift, freshness).
+"""Great Expectations suite for raw Bronze data (schema drift + freshness).
 
 Runs BEFORE any dbt transform, per the DAG's step order (run_quality_gates ->
 dbt_run_staging -> ...) — these are checks on the raw envelope shape and recency, not on
-modeled data. The remaining Phase 4 checks (price plausibility, crossed book, volume
+modeled data. The remaining checks (price plausibility, crossed book, volume
 monotonicity, referential integrity, uniqueness) are dbt tests instead
 (dbt/tests/assert_*.sql) — they're about modeled/transformed data, where dbt's own test
 framework is the more natural fit than re-deriving the same logic in GX. See

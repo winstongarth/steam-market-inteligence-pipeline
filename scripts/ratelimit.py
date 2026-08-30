@@ -1,14 +1,14 @@
 """
-Phase 0 step 3 — measure the real rate limit. Throwaway script.
+Measure the real rate limit. Throwaway script.
 
 Ramps request rate against the cheapest endpoint (priceoverview, single item)
 in discrete steps until the first 429, then STOPS IMMEDIATELY and measures
 recovery time by polling with backoff, capped so this run stays bounded.
 
-Per CLAUDE_4.md §2.3/§2.5: we do not hammer through a 429, we do not retry
+Rules this respects: we do not hammer through a 429, we do not retry
 tightly, and we log every 429 as a first-class event.
 
-Run: uv run python scripts/phase0_ratelimit.py
+Run: uv run python scripts/ratelimit.py
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ USER_AGENT = (
     "steam-market-pipeline-recon/0.1 "
     "(personal research project; contact: winstonpatrickgarth@gmail.com)"
 )
-OUT = Path(__file__).resolve().parent.parent / "docs" / "PHASE0_RATELIMIT.json"
+OUT = Path(__file__).resolve().parent.parent / "docs" / "evidence" / "rate-limit-probe.json"
 
 APP_ID = 730
 HASH_NAME = "AK-47 | Redline (Field-Tested)"

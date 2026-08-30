@@ -1,9 +1,9 @@
 """Pydantic models for raw Steam Market payloads.
 
-Every field from Steam is optional until proven otherwise (CLAUDE.md §6) — models here are
+Every field from Steam is optional until proven otherwise (a rule this project applies throughout) — models here are
 deliberately permissive. Money stays as the locale-formatted string Steam returns; parsing
-to integer minor units happens exactly once, downstream in the Silver normalization pass
-(Phase 2), not here.
+to integer minor units happens exactly once, downstream in the Silver normalization pass,
+not here.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class RawEnvelope(BaseModel):
         return f"{self.app_id}:{market_hash_name or ''}"
 
 
-# --- Confirmed shapes (Phase 0, tests/fixtures/) --------------------------------------
+# --- Confirmed shapes (tests/fixtures/) --------------------------------------
 
 
 class AssetDescription(BaseModel):
@@ -89,9 +89,9 @@ class PriceOverviewResponse(BaseModel):
     model_config = {"extra": "allow"}
 
 
-# --- Order book (Phase 1 — see ingest/endpoints/orderbook.py, docs/DECISIONS.md) -------
+# --- Order book (see ingest/endpoints/orderbook.py, docs/DECISIONS.md) -----------------
 #
-# This replaces the spec's original itemordershistogram shape entirely — different
+# This replaces the originally documented itemordershistogram shape entirely — different
 # endpoint, different fields, different (better: pre-parsed integer minor units) money
 # representation. Verified against a real response, tests/fixtures/market_orderbook.json.
 
@@ -123,7 +123,7 @@ class OrderBookResponse(BaseModel):
 
 # --- Unverified / blocked (see docs/DECISIONS.md) ---------------------------------------
 #
-# itemordersactivity: optional per the spec ("use only if it yields genuine event-level
+# itemordersactivity: optional in scope ("use only if it yields genuine event-level
 # data"). No modern replacement found during the orderbook investigation; not wired into
 # the scheduler. Left here in case a future session finds one.
 

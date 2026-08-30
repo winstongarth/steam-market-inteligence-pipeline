@@ -1,14 +1,14 @@
-"""Money-string parsing (CLAUDE.md Phase 2 step 4: "parse all money to integer minor
-units + currency code here, once").
+"""Money-string parsing. All money is parsed to integer minor units plus a currency
+code here, once.
 
 Deliberately narrow: only recognizes the currency display formats actually observed and
-verified in Phase 0 (docs/PHASE0_FINDINGS.md §3.7). An unrecognized currency code returns
-None rather than a guessed value — never silently misparse a price.
+verified (docs/FINDINGS.md). An unrecognized currency code returns None rather than a
+guessed value — never silently misparse a price.
 
 Currency code comes from the request that produced the string (RawEnvelope.currency, or
 the order-book endpoint's own eCurrency field) — not reverse-inferred from the symbol.
-That sidesteps a real ambiguity found in Phase 0: JPY (8) and CNY (23) both display with
-the same "¥" symbol, so the symbol alone can't tell them apart, but the code always can.
+That sidesteps a real ambiguity: JPY (8) and CNY (23) both display with the same "¥"
+symbol, so the symbol alone can't tell them apart, but the code always can.
 
 Values are always returned as integer minor units at an implied 2 decimal places
 (amount * 100), matching the convention Steam's own /market/orderbook endpoint uses even
@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 
 # thousands / decimal separator characters, per currency code, derived from real observed
-# samples (docs/PHASE0_FINDINGS.md §3.7). decimal=None means the sample never showed a
+# samples (docs/FINDINGS.md). decimal=None means the sample never showed a
 # fractional part (Steam appears to omit ".00"-equivalent suffixes for whole amounts —
 # verified this doesn't break parsing, since the decimal separator is optional whenever it
 # appears in the input, not assumed present).

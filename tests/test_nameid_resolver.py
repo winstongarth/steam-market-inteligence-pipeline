@@ -43,7 +43,7 @@ async def test_resolve_raises_clear_error_when_nothing_found(tmp_path):
 
 @pytest.mark.asyncio
 async def test_resolve_extracts_from_real_bucket_page_fixture(tmp_path):
-    """The fixture is a real (trimmed) excerpt of Valve's bucket page, captured Phase 1.
+    """The fixture is a real (trimmed) excerpt of Valve's bucket page, captured earlier.
     Confirms the extraction regex still works against real recorded data."""
     bucket_page_html = (FIXTURES / "listings_bucket_page_excerpt.html").read_text(encoding="utf-8")
     resolver = NameIdResolver(cache_path=tmp_path / "market_bucket_ids.json")

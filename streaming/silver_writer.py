@@ -1,5 +1,5 @@
-"""Consumes market.changes.v1 (Phase 2's CDC output) and writes Parquet to S3/MinIO,
-partitioned dt=YYYY-MM-DD/hour=HH/app_id=NNN/ — this is the landing step Phase 3's dbt
+"""Consumes market.changes.v1 (the CDC output) and writes Parquet to S3/MinIO,
+partitioned dt=YYYY-MM-DD/hour=HH/app_id=NNN/ — this is the landing step the dbt
 staging models read from (fct_price_change).
 
 Same buffering/flush and crash-safe commit-after-flush design as bronze_writer.py (see

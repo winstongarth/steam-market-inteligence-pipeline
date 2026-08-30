@@ -1,5 +1,5 @@
--- §3.1 search/render, exploded to one row per item. Phase 0 measured pagesize=10, not
--- the spec's original ~100 assumption — see docs/PHASE0_FINDINGS.md §3.1.
+-- search/render, exploded to one row per item. Measured pagesize=10, not the originally
+-- assumed ~100 — see docs/FINDINGS.md.
 --
 -- No currency here: search/render doesn't take or return a currency parameter. Its
 -- sell_price empirically looks USD-cents-scaled but that's unconfirmed — see

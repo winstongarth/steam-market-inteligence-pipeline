@@ -1,4 +1,4 @@
--- Uniqueness (CLAUDE.md Phase 4). Grain: item x observed_at (orderbook is single-currency
+-- Uniqueness. Grain: item x observed_at (orderbook is single-currency
 -- per response, no source_endpoint ambiguity like fct_price_observation has).
 
 select

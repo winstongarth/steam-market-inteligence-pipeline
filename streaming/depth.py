@@ -1,4 +1,4 @@
-"""Spread and order-book depth calculations (CLAUDE.md Phase 2 step 5).
+"""Spread and order-book depth calculations.
 
 Pure functions, no Spark dependency — testable directly, wrapped as UDFs in cdc_job.py
 where needed. Depth-at-X%-from-mid only applies to orderbook-sourced records, since only
@@ -32,7 +32,7 @@ def _pairs(compact_orders: list[int] | None) -> list[tuple[int, int]]:
     qty values are NOT monotonic as price moves away from the touch (e.g. 24, 278, 1196,
     184, 247, ...) — this is per-price-level resting quantity, not a running cumulative
     total. That's notably different from the OLD spec's documented `buy_order_graph`/
-    `sell_order_graph` shape (§3.2), which described cumulative_quantity explicitly. Worth
+    `sell_order_graph` shape, which described cumulative_quantity explicitly. Worth
     knowing if this module is ever compared against that old (now-dead) format's semantics.
     """
     if not compact_orders:

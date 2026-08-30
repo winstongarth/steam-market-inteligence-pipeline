@@ -1,6 +1,5 @@
 """Money parsing tests — pure functions, no Spark/network needed. Verified against the
-real currency-format samples recorded in tests/fixtures/currency_probe_extended.json
-(Phase 0)."""
+real currency-format samples recorded in tests/fixtures/currency_probe_extended.json."""
 
 import json
 from pathlib import Path
@@ -50,7 +49,7 @@ def test_parse_volume_string():
 
 
 def test_against_real_fixture_median_and_lowest_prices():
-    """Cross-check against the actual recorded Phase 0 fixture, not just hand-copied values."""
+    """Cross-check against the actual recorded fixture, not just hand-copied values."""
     data = json.loads((FIXTURES / "currency_probe_extended.json").read_text(encoding="utf-8"))
     for code_str, entry in data.items():
         code = int(code_str)

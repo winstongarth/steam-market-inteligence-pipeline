@@ -53,7 +53,7 @@ def envelope_df(spark):
 
 def test_normalize_search_render_explodes_results(envelope_df):
     rows = normalize_search_render(envelope_df).collect()
-    # search_render.json has 10 results (Phase 0 measured page-size cap)
+    # search_render.json has 10 results (measured page-size cap)
     assert len(rows) == 10
     first = next(r for r in rows if r.market_hash_name == "Dreams & Nightmares Case")
     assert first.lowest_sell == 167  # sell_price in the fixture, already integer cents

@@ -36,7 +36,7 @@ class SteamMarketClient:
         self._client = httpx.AsyncClient(
             headers={"User-Agent": config.USER_AGENT},
             timeout=config.REQUEST_TIMEOUT_SECONDS,
-            follow_redirects=True,  # §3.3: the listings page 302s into the bucket SPA page
+            follow_redirects=True,  # the listings page 302s into the bucket SPA page
         )
 
     async def __aenter__(self) -> "SteamMarketClient":
@@ -70,8 +70,8 @@ class SteamMarketClient:
             response = await self._client.get(url, params=params, headers=headers)
             status = response.status_code
 
-            # Ban-shape (§2.7) means "HTML where JSON was expected" — endpoints fetched with
-            # expect_json=False (e.g. the §3.3 listings/bucket page) are legitimately HTML.
+            # Ban-shape detection means "HTML where JSON was expected" — endpoints fetched with
+            # expect_json=False (e.g. the listings/bucket page) are legitimately HTML.
             if expect_json and _looks_ban_shaped(response):
                 self.breaker.record_ban_shaped_response()
                 raise ManualRestartRequiredError("ban-shaped response received")

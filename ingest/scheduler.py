@@ -1,4 +1,4 @@
-"""Tiered scheduler (§7.1.5): Tier A (watchlist, 5min), Tier B (~top-5000, 60min),
+"""Tiered scheduler (7.1.5): Tier A (watchlist, 5min), Tier B (~top-5000, 60min),
 Tier C (full sweep, daily). All requests funnel through one SteamMarketClient — one token
 bucket, one circuit breaker — via a single priority-queue dispatcher, so Tier A jobs queued
 are always pulled ahead of already-queued Tier B/C jobs. That's what gives Tier A priority
@@ -31,7 +31,7 @@ TIER_A_PRIORITY = 0
 TIER_B_PRIORITY = 1
 TIER_C_PRIORITY = 2
 TIER_B_CATALOG_SIZE = 5000
-SEARCH_RENDER_PAGE_SIZE = 10  # Phase 0 measured cap — see docs/PHASE0_FINDINGS.md §3.1
+SEARCH_RENDER_PAGE_SIZE = 10  # Measured cap — see docs/FINDINGS.md
 
 Job = Callable[[], Awaitable[None]]
 

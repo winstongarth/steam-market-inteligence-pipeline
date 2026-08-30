@@ -1,4 +1,4 @@
-"""Central config for values the spec marks [CONFIG]. Override via environment variables."""
+"""Central config for tunable [CONFIG] values. Override via environment variables."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ def _int_env(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
-# Phase 0 measured: first 429 at ~2 req/s sustained, recovered after ~30s.
-# Production default is set to 25% of that measured limit (under the spec's 40% ceiling).
-# See docs/PHASE0_FINDINGS.md and docs/DECISIONS.md for the measurement.
+# Measured: first 429 at ~2 req/s sustained, recovered after ~30s.
+# Production default is set to 25% of that measured limit (under a 40% ceiling).
+# See docs/FINDINGS.md and docs/DECISIONS.md for the measurement.
 GLOBAL_REQUESTS_PER_SECOND = _float_env("STEAM_RPS", 0.5)
 
-# On a 429, cut the refill rate for the rest of the hour by this factor (§2.5).
+# On a 429, cut the refill rate for the rest of the hour by this factor.
 BACKOFF_REFILL_REDUCTION_FACTOR = _float_env("STEAM_BACKOFF_REDUCTION", 0.5)
 
 # Jittered exponential backoff for retrying after a 429.
@@ -26,7 +26,7 @@ RETRY_BASE_DELAY_SECONDS = _float_env("STEAM_RETRY_BASE_DELAY", 2.0)
 RETRY_MAX_DELAY_SECONDS = _float_env("STEAM_RETRY_MAX_DELAY", 60.0)
 RETRY_JITTER_SECONDS = _float_env("STEAM_RETRY_JITTER", 1.0)
 
-# Circuit breaker (§2.7).
+# Circuit breaker.
 CIRCUIT_BREAKER_CONSECUTIVE_429_THRESHOLD = _int_env("STEAM_CB_429_THRESHOLD", 3)
 CIRCUIT_BREAKER_429_HALT_SECONDS = _float_env("STEAM_CB_429_HALT", 30 * 60)
 CIRCUIT_BREAKER_403_HALT_SECONDS = _float_env("STEAM_CB_403_HALT", 30 * 60)
@@ -40,7 +40,7 @@ USER_AGENT = os.environ.get(
 
 REQUEST_TIMEOUT_SECONDS = _float_env("STEAM_REQUEST_TIMEOUT", 15.0)
 
-# Tier cadences (§7.1.5).
+# Tier cadences.
 TIER_A_INTERVAL_SECONDS = _int_env("STEAM_TIER_A_INTERVAL", 5 * 60)
 TIER_B_INTERVAL_SECONDS = _int_env("STEAM_TIER_B_INTERVAL", 60 * 60)
 TIER_C_INTERVAL_SECONDS = _int_env("STEAM_TIER_C_INTERVAL", 24 * 60 * 60)
@@ -48,7 +48,7 @@ TIER_C_INTERVAL_SECONDS = _int_env("STEAM_TIER_C_INTERVAL", 24 * 60 * 60)
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:19092")
 KAFKA_RAW_TOPIC = "market.raw.v1"
 
-# §3.6 — games to cover. Multi-app coverage is deliberate (heterogeneous schemas).
+# Games to cover. Multi-app coverage is deliberate (heterogeneous schemas).
 APP_IDS: dict[int, str] = {
     730: "CS2",
     570: "Dota 2",

@@ -1,7 +1,7 @@
--- §3.4 priceoverview. market_hash_name isn't in the response body — it's in the request
+-- priceoverview. market_hash_name isn't in the response body — it's in the request
 -- params we stored alongside the envelope. Money strings parsed via macros/parse_price.sql,
 -- joined against dim_currency using the envelope's own `currency` field (what we
--- requested), never reverse-inferred from the string — see docs/PHASE0_FINDINGS.md §3.7.
+-- requested), never reverse-inferred from the string — see docs/FINDINGS.md.
 
 with source as (
     select app_id, currency, observed_at, raw_payload, request_params

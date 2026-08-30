@@ -1,5 +1,5 @@
-"""§3.4 — /market/priceoverview/, one item per request. Used sparingly, mainly as a
-cross-check against search/render (§7.3 reconciliation)."""
+"""/market/priceoverview/, one item per request. Used sparingly, mainly as a
+cross-check against search/render (reconciliation)."""
 
 from __future__ import annotations
 

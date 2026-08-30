@@ -1,4 +1,4 @@
--- Phase 6 (CLAUDE.md, "optional, high value"): FX-adjusted price gaps, per non-USD
+-- Cross-currency dislocation: FX-adjusted price gaps, per non-USD
 -- observation, against the nearest-in-time USD observation for the same item. Because
 -- Steam prices regionally, persistent structural gaps should appear — this is the number
 -- that answers "is this really regional pricing, or just FX noise."

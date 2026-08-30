@@ -1,4 +1,4 @@
--- Regression test for the parse_price_sql bug (docs/DECISIONS.md, Phase 6): currencies
+-- Regression test for the parse_price_sql bug (docs/DECISIONS.md): currencies
 -- with no decimal separator (JPY, IDR, UAH — decimal_sep is blank in dim_currency.csv,
 -- which dbt-duckdb's seed loader imports as NULL) used to silently parse to NULL instead
 -- of a real value. Fails if any priceoverview row for one of these currencies has a null

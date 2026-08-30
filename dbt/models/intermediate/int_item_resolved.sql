@@ -8,7 +8,7 @@
 -- (612 items at seed time), not the full catalog. That's an expected, honest limitation
 -- of a cache built incrementally by Tier A polling a watchlist, not a bug.
 --
--- Bug found and fixed (2026-08-21, spotted while building Phase 4's volume-monotonicity
+-- Bug found and fixed (2026-08-21, spotted while building the volume-monotonicity
 -- check): this model used to map orderbook's `buy_orders_count` (cBuyOrders — a resting
 -- order-book DEPTH count) into the shared `volume` column alongside priceoverview's
 -- actual trade volume. Those are different metrics entirely — cBuyOrders was ~53,000+ for

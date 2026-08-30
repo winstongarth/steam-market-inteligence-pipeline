@@ -1,0 +1,28 @@
+EVIDENCE: dbt blocking gate failing on deliberately-injected bad data (the gate-proof
+step for this project's quality gates — deliberately inject a bad batch, capture the DAG
+failing at the gate). A duplicate row was manually inserted into fct_price_observation (a
+real, existing row copied and re-inserted), then `dbt test --select
+assert_no_duplicate_grain_fct_price_observation` was run against the corrupted table.
+Actual dbt CLI exit code: 1 (confirmed separately, not just visible in this log — this is
+what causes Airflow's dbt_test_staging/dbt_test_marts tasks to fail and halt downstream
+tasks). State was restored via `dbt run` immediately after capturing this evidence.
+
+02:56:42  Running with dbt=1.12.3
+02:56:42  Registered adapter: duckdb=1.11.0
+02:56:43  Found 12 models, 1 snapshot, 3 seeds, 21 data tests, 2 sources, 502 macros
+02:56:43  
+02:56:43  Concurrency: 4 threads (target='dev')
+02:56:43  
+02:56:43  1 of 1 START test assert_no_duplicate_grain_fct_price_observation .............. [RUN]
+02:56:43  1 of 1 FAIL 1 assert_no_duplicate_grain_fct_price_observation .................. [FAIL 1 in 0.03s]
+02:56:43  
+02:56:43  Finished running 1 test in 0 hours 0 minutes and 0.19 seconds (0.19s).
+02:56:43  
+02:56:43  Completed with 1 error, 0 partial successes, and 0 warnings:
+02:56:43  
+02:56:43  [ERROR]: in test assert_no_duplicate_grain_fct_price_observation (tests\assert_no_duplicate_grain_fct_price_observation.sql)
+02:56:43    Got 1 result, configured to fail if != 0
+02:56:43  
+02:56:43    compiled code at target\compiled\steam_market\tests\assert_no_duplicate_grain_fct_price_observation.sql
+02:56:43  
+02:56:43  Done. PASS=0 WARN=0 ERROR=1 SKIP=0 NO-OP=0 REUSED=0 TOTAL=1

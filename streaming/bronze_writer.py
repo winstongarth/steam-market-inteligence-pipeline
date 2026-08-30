@@ -1,8 +1,8 @@
 """Consumes market.raw.v1 and writes Parquet to S3/MinIO, partitioned
-dt=YYYY-MM-DD/hour=HH/app_id=NNN/endpoint=X/ (§5, Phase 1 step 7).
+dt=YYYY-MM-DD/hour=HH/app_id=NNN/endpoint=X/.
 
 Buffers records per partition key in memory and flushes on a timer or size threshold —
-simple and sufficient for Phase 1's ~0.5 req/s ingest volume. Phase 2's cdc_job.py is the
+simple and sufficient for the ~0.5 req/s ingest volume. cdc_job.py is the
 real streaming-semantics component; this writer's job is just "land Bronze reliably."
 """
 

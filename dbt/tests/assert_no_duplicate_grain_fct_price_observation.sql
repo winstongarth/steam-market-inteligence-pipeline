@@ -1,4 +1,4 @@
--- Uniqueness (CLAUDE.md Phase 4): no duplicate grain in any fact table. Grain here is
+-- Uniqueness: no duplicate grain in any fact table. Grain here is
 -- item x currency x observed_at x source_endpoint (source_endpoint included because two
 -- different endpoints CAN legitimately report for the same item at the exact same
 -- millisecond only by coincidence — including it makes this a true duplicate-row check,

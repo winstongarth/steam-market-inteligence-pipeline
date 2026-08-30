@@ -1,13 +1,13 @@
 """
-Phase 0 recon — throwaway script.
+API recon — throwaway script.
 
-Hits every endpoint in CLAUDE_4.md §3 exactly once, pretty-prints the response,
-and saves it to tests/fixtures/. Also fetches robots.txt for compliance review.
+Hits every endpoint in scope exactly once, pretty-prints the response, and saves it to
+tests/fixtures/. Also fetches robots.txt for compliance review.
 
 This is NOT production code. It exists to confirm reality (field names, types,
 whether pricehistory needs a login cookie) before any pipeline code is written.
 
-Run: uv run python scripts/phase0_recon.py
+Run: uv run python scripts/recon.py
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import httpx
 
 BASE = "https://steamcommunity.com"
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
-FINDINGS = Path(__file__).resolve().parent.parent / "docs" / "PHASE0_FINDINGS.md"
+FINDINGS = Path(__file__).resolve().parent.parent / "docs" / "FINDINGS.md"
 
 USER_AGENT = (
     "steam-market-pipeline-recon/0.1 "
@@ -61,7 +61,7 @@ def pretty_json(text: str) -> tuple[str, dict | list | None]:
 def main() -> None:
     client = httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=15.0)
 
-    log(f"# Phase 0 findings — recorded {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+    log(f"# Recon findings — recorded {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     log(f"User-Agent used: `{USER_AGENT}`\n")
 
     # --- robots.txt -------------------------------------------------------
@@ -188,8 +188,8 @@ def main() -> None:
     log("")
     time.sleep(RECON_DELAY_SECONDS)
 
-    # --- Phase 0 step 5: pricehistory without login -------------------------
-    log("## Phase 0 step 5 — /market/pricehistory/ without a login cookie\n")
+    # --- pricehistory without login -------------------------
+    log("## /market/pricehistory/ without a login cookie\n")
     params = {"appid": APP_ID, "market_hash_name": HASH_NAME}
     r = client.get(f"{BASE}/market/pricehistory/", params=params)
     pretty, parsed = pretty_json(r.text)

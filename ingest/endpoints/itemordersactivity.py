@@ -1,6 +1,6 @@
-"""§3.5 — /market/itemordersactivity/, optional recent-order-events endpoint.
+"""/market/itemordersactivity/, optional recent-order-events endpoint.
 
-UNVERIFIED. §3.2's depth endpoint was unblocked in Phase 1 via a different mechanism
+UNVERIFIED. The depth endpoint was unblocked via a different mechanism
 entirely (see ingest/endpoints/orderbook.py, docs/DECISIONS.md) — this endpoint wasn't
 part of that investigation and no modern replacement for it has been found. Not wired into
 the scheduler; the classic `item_nameid` param below is untested against the current site

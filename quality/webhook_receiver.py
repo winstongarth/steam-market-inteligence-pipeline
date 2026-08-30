@@ -1,5 +1,5 @@
-"""Minimal local webhook receiver (CLAUDE.md Phase 4: "a local webhook if staying off
-AWS"). Not a production alerting system — proves the alerting interface really goes
+"""Minimal local webhook receiver — a local webhook, staying off AWS. Not a production
+alerting system — proves the alerting interface really goes
 somewhere: every POSTed alert is appended, one JSON line per alert, to logs/alerts.jsonl.
 Swap ALERT_WEBHOOK_URL (quality/alerting.py) for a real Slack/PagerDuty endpoint later;
 send_alert()'s callers don't change.

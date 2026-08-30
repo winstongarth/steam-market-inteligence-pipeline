@@ -32,7 +32,7 @@ models:
         tests: [not_null]
 
   - name: fct_price_change
-    description: CDC change events (Phase 2).
+    description: CDC change events.
     columns:
       - name: app_id
         tests: [not_null]
@@ -55,7 +55,7 @@ models:
 
   - name: mart_cross_currency_dislocation
     description: >
-      Phase 6: FX-adjusted price gaps per item/date/currency against a USD baseline for
+      FX-adjusted price gaps per item/date/currency against a USD baseline for
       the same item/date, using real ECB rates (seeds/dim_fx_rate.csv).
     columns:
       - name: app_id

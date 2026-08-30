@@ -1,6 +1,6 @@
-"""§3.3 — resolving the identifier needed for order-book depth, with a permanent on-disk cache.
+"""Resolving the identifier needed for order-book depth, with a permanent on-disk cache.
 
-STATUS (resolved, Phase 1, 2026-08-20): the spec's original mechanism (regex
+STATUS (resolved 2026-08-20): the originally documented mechanism (regex
 `Market_LoadOrderSpread` out of the listings page) is dead — Valve redirects that page to a
 "bucket" SPA (see docs/DECISIONS.md, "item_nameid resolution method is broken"). The SPA's
 own network calls were traced statically (downloading its code-split JS chunks and reading
@@ -15,7 +15,7 @@ both implemented below:
 1. **Commodity fast path, zero extra requests.** For fungible items (`commodity: 1` in
    `asset_description`, e.g. cases, stickers, sealed containers), `market_bucket_id` equals
    `market_bucket_group_id` with its leading `G` stripped. `market_bucket_group_id` is
-   already present in every `search/render` result (§3.1) — Tier B/C get this for free while
+   already present in every `search/render` result — Tier B/C get this for free while
    sweeping the catalog, no listings-page fetch needed at all. See
    `seed_from_search_render_result`.
 
@@ -24,12 +24,12 @@ both implemented below:
    Fetching `/market/listings/{appid}/{hash_name}` (which redirects into the bucket SPA page)
    and regex-extracting `market_hash_name` → `market_bucket_id` pairs from the embedded
    listing data resolves **every exterior of that item family in one request** — cheaper than
-   the spec's original "1 request per exact hash_name" assumption. See `_resolve_uncached`.
+   the originally assumed "1 request per exact hash_name". See `_resolve_uncached`.
 
 Caveat: the extraction regex parses an undocumented, escaped-JSON-in-HTML blob that Valve
-could change without notice. It's verified against two real fixtures (Phase 0/1, one
-commodity + one wear-variant item) but is best-effort, not a stable contract — if Valve
-changes the bucket page's internal structure, this breaks again and needs re-tracing.
+could change without notice. It's verified against two real fixtures (one commodity + one
+wear-variant item) but is best-effort, not a stable contract — if Valve changes the
+bucket page's internal structure, this breaks again and needs re-tracing.
 """
 
 from __future__ import annotations

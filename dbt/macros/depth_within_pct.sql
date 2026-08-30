@@ -1,5 +1,5 @@
 {#
-  SQL port of streaming/depth.py's depth_within_pct (Phase 2, verified against real
+  SQL port of streaming/depth.py's depth_within_pct (verified against real
   order-book data that rgCompactBuyOrders/rgCompactSellOrders entries are per-price-level
   quantities, NOT cumulative — see depth.py's `_pairs` docstring). Sums quantity across
   every price level within `pct` of `mid_expr`, not a max/cumulative lookup.

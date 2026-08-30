@@ -1,6 +1,6 @@
-"""Token bucket + adaptive backoff + circuit breaker, per CLAUDE.md §2 and §7.1.1.
+"""Token bucket + adaptive backoff + circuit breaker.
 
-Non-negotiable rules this module enforces (§2):
+Non-negotiable rules this module enforces:
 - Single well-behaved client: a global token bucket caps sustained request rate.
 - Every 429 is a first-class event: logged, and it reduces the bucket's refill rate
   for the rest of the hour rather than just being retried.
@@ -94,7 +94,7 @@ class TokenBucket:
 
 @dataclass
 class CircuitBreaker:
-    """Tracks 429/403/ban-shaped responses and enforces halt windows per §2.7."""
+    """Tracks 429/403/ban-shaped responses and enforces halt windows."""
 
     consecutive_429_threshold: int = config.CIRCUIT_BREAKER_CONSECUTIVE_429_THRESHOLD
     halt_429_seconds: float = config.CIRCUIT_BREAKER_429_HALT_SECONDS

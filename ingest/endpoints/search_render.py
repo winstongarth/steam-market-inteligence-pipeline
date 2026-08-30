@@ -1,7 +1,7 @@
-"""§3.1 — /market/search/render/, the breadth (catalog sweep) endpoint.
+"""/market/search/render/, the breadth (catalog sweep) endpoint.
 
-Phase 0 correction: pagesize is capped at 10/request regardless of the requested `count`
-(see docs/PHASE0_FINDINGS.md §3.1) — this is verified fact, not the spec's original ~100.
+Measured correction: pagesize is capped at 10/request regardless of the requested `count`
+(see docs/FINDINGS.md) — this is verified fact, not the originally assumed ~100.
 """
 
 from __future__ import annotations

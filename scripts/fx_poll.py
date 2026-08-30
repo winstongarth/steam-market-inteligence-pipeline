@@ -1,18 +1,18 @@
-"""Phase 6 — cross-currency dislocation: poll a 50-item watchlist across USD/EUR/SGD/IDR.
+"""Cross-currency dislocation: poll a 50-item watchlist across USD/EUR/SGD/IDR.
 
-Throwaway script (like the phase0/phase1 ones) — reuses the existing ingest pipeline
-(SteamMarketClient -> priceoverview -> Kafka market.raw.v1) rather than building a
-parallel path, so this data flows through Bronze/Silver/Gold exactly like everything
-else.
+Throwaway script — reuses the existing ingest pipeline (SteamMarketClient ->
+priceoverview -> Kafka market.raw.v1) rather than building a parallel path, so this data
+flows through Bronze/Silver/Gold exactly like everything else.
 
-Currency codes are the Phase 0-corrected ones (docs/PHASE0_FINDINGS.md §3.7), NOT the
-spec's original wrong assumption (20=SGD, 23=IDR): USD=1, EUR=3, SGD=13, IDR=10.
+Currency codes are the measured, corrected ones (docs/FINDINGS.md), NOT the commonly
+assumed wrong mapping (20=SGD, 23=IDR): USD=1, EUR=3, SGD=13, IDR=10.
 
-Run: PYTHONPATH=. uv run python scripts/phase6_fx_poll.py
-(50 items x 4 currencies = 200 requests, ~400s at the Phase 0-measured 0.5 req/s rate)
+Run: PYTHONPATH=. uv run python scripts/fx_poll.py
+(50 items x 4 currencies = 200 requests, ~400s at the measured 0.5 req/s rate)
 
 RESUME_FROM_INDEX env var (default 0) skips already-polled items — used on 2026-08-21 to
-resume after the circuit breaker tripped at item 5 (see docs/DECISIONS.md, Phase 6).
+resume after the circuit breaker tripped at item 5 (see docs/DECISIONS.md, "Ingestion &
+rate limiting").
 """
 
 from __future__ import annotations
@@ -27,11 +27,11 @@ from ingest.client import SteamMarketClient
 from ingest.endpoints import priceoverview
 from ingest.kafka_producer import EnvelopePublisher
 
-logger = logging.getLogger("scripts.phase6_fx_poll")
+logger = logging.getLogger("scripts.fx_poll")
 
 APP_ID = 730
 CURRENCIES = {1: "USD", 3: "EUR", 13: "SGD", 10: "IDR"}
-WATCHLIST_PATH = Path(__file__).parent / "phase6_watchlist.json"
+WATCHLIST_PATH = Path(__file__).parent / "watchlist.json"
 RESUME_FROM_INDEX = int(os.environ.get("RESUME_FROM_INDEX", "0"))
 
 

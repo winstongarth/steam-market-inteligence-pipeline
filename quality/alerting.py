@@ -1,7 +1,6 @@
-"""Alert routing (CLAUDE.md Phase 4 step 4: "Route failures to SNS (or a local webhook if
-staying off AWS)"). This project stays off AWS — alerts POST to a configurable local
-webhook, defaulting to quality/webhook_receiver.py's local receiver. The interface
-(`send_alert`) is what matters for swapping in a real Slack/PagerDuty/SNS endpoint later;
+"""Alert routing. Alerts route to a configurable local webhook, defaulting to
+quality/webhook_receiver.py's local receiver — this project stays off AWS. The interface
+(`send_alert`) is what matters for swapping in a real SNS/Slack/PagerDuty endpoint later;
 callers never change.
 """
 

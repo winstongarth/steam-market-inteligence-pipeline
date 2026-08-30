@@ -48,7 +48,7 @@ services:
     volumes:
       - ./:/opt/app
     working_dir: /opt/app
-    # Idle by default — Phase 2 dev/validation runs are `docker exec`'d in manually
+    # Idle by default — dev/validation runs are `docker exec`'d in manually
     # (see docs/DECISIONS.md). A long-lived job would replace this command.
     # pandas is installed at container start (not baked into the base image) —
     # applyInPandasWithState (streaming/cdc_job.py) needs it on the driver.

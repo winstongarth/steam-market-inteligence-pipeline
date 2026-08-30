@@ -1,12 +1,12 @@
-"""Phase 1 smoke test — throwaway script, not part of the pipeline.
+"""Smoke test — throwaway script, not part of the pipeline.
 
 Proves the wiring end-to-end with a small number of real (rate-limited) requests:
 fetch search_render + priceoverview once each -> publish to Kafka (Redpanda) ->
-bronze_writer consumes and flushes real Parquet to MinIO. This is NOT the 24h soak test
-required for Phase 1 exit — it's a correctness check that every hop actually works before
-handing the scheduler an unattended multi-day run.
+bronze_writer consumes and flushes real Parquet to MinIO. This is NOT the 24h soak test —
+it's a correctness check that every hop actually works before handing the scheduler an
+unattended multi-day run.
 
-Run: uv run python scripts/phase1_smoke_test.py
+Run: uv run python scripts/smoke_test.py
 (requires `docker compose up -d` first)
 """
 

@@ -1,4 +1,4 @@
-"""steam_market_batch — CLAUDE.md Phase 4 orchestration DAG.
+"""steam_market_batch — the orchestration DAG.
 
     wait_for_bronze  ->  copy_into_snowflake  ->  run_quality_gates  ->  dbt_seed
          ->  dbt_run_staging  ->  dbt_test_staging  (BLOCKING)
@@ -13,18 +13,19 @@ how dbt/streaming already run.
 
 ## Deliberate simplifications, stated plainly (not hidden)
 
-- **`copy_into_snowflake` is a documented no-op this phase.** CLAUDE.md §4.1: don't open
-  the Snowflake trial until Phases 1 and 4 are stable — neither is yet (Phase 1's 24h
-  soak test hasn't completed). The task exists so the DAG's structure matches the spec,
-  and logs clearly that it's skipped rather than silently pretending to do something.
+- **`copy_into_snowflake` is a documented no-op this phase.** Snowflake is deliberately
+  deferred until the soak test and unattended-DAG gaps close (docs/DECISIONS.md) — the
+  24h soak test hasn't completed. The task exists so the DAG's structure matches the
+  intended pipeline shape, and logs clearly that it's skipped rather than silently
+  pretending to do something.
 - **`wait_for_bronze` checks Bronze has *any* recent-ish data, rather than blocking with
   a real Airflow Sensor's poke/timeout semantics against a continuously-running
   scheduler.** `ingest/scheduler.py` isn't running unattended yet (same 24h-soak-test
   gap) — a true sensor waiting on continuous fresh partitions would just time out in this
-  environment. Revisit once Phase 1's scheduler runs unattended.
-- **`detect_anomalies` is a stub.** Phase 5 ("Anomaly detection") hasn't been built yet —
-  this task exists so the DAG's shape is complete per the spec's diagram, and logs
-  explicitly that it's a placeholder rather than silently no-op-ing without saying so.
+  environment. Revisit once the scheduler runs unattended.
+- **`detect_anomalies` is a stub.** Anomaly detection hasn't been built yet — this task
+  exists so the DAG's shape is complete, and logs explicitly that it's a placeholder
+  rather than silently no-op-ing without saying so.
 
 ## Gates that actually block
 
@@ -33,12 +34,12 @@ how dbt/streaming already run.
 halts `dbt_run_marts`/downstream by Airflow's default trigger rules. `run_quality_gates`
 (the Great Expectations Bronze suite, quality/expectations/bronze_suite.py) raises
 AirflowException on failure for the same reason. Proven with real injected bad data before
-this DAG was written — see docs/PHASE4_GATE_FAILURE_EVIDENCE.txt and
-docs/PHASE4_GATE_FAILURE_EVIDENCE_dbt.txt, and docs/DECISIONS.md for the full account.
+this DAG was written — see docs/evidence/quality-gate-failure-great-expectations.txt and
+docs/evidence/quality-gate-failure-dbt.txt, and docs/DECISIONS.md for the full account.
 
 `publish_alerts` runs with `trigger_rule=TriggerRule.ALL_DONE` — it must run and report
-even when upstream tasks failed, or "route failures to a webhook" (§4 step 4) wouldn't
-actually happen on the failure path that matters most.
+even when upstream tasks failed, or routing failures to a webhook wouldn't actually
+happen on the failure path that matters most.
 """
 
 from __future__ import annotations
@@ -127,9 +128,9 @@ def _wait_for_bronze(**context) -> None:
 
 def _copy_into_snowflake(**context) -> None:
     logger.warning(
-        "copy_into_snowflake: SKIPPED. Snowflake trial deliberately not opened yet — "
-        "CLAUDE.md §4.1 requires Phases 1 and 4 to be stable first, and Phase 1's 24h "
-        "soak test hasn't completed. See docs/DECISIONS.md."
+        "copy_into_snowflake: SKIPPED. Snowflake is deliberately deferred until the soak "
+        "test and unattended-DAG gaps close. The 24h soak test hasn't completed. "
+        "See docs/DECISIONS.md."
     )
 
 
@@ -166,9 +167,9 @@ def _run_quality_gates(**context) -> None:
 
 def _detect_anomalies(**context) -> None:
     logger.warning(
-        "detect_anomalies: STUB. Phase 5 (z-score/EWMA/volume-spike/crossed-book anomaly "
-        "detection) hasn't been built yet — this task exists so the DAG's shape matches "
-        "the spec, not to claim anomaly detection is implemented."
+        "detect_anomalies: STUB. Anomaly detection (z-score/EWMA/volume-spike/crossed-book) "
+        "hasn't been built yet — this task exists so the DAG's shape is complete, not to "
+        "claim anomaly detection is implemented."
     )
 
 

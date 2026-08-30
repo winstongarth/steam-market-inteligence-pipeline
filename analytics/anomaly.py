@@ -1,12 +1,12 @@
-"""Phase 5 — Anomaly detection (CLAUDE.md).
+"""Anomaly detection.
 
-Reads Phase 3's dbt marts (mart_item_daily, fct_orderbook_snapshot) from the DuckDB
+Reads the dbt marts (mart_item_daily, fct_orderbook_snapshot) from the DuckDB
 warehouse, computes four anomaly classes, and writes a ranked list to `mart_anomaly` in
 the same database.
 
 ## Honest data-scope note
 
-CLAUDE.md's defaults (30-day z-score window, day-of-week volume seasonality) assume
+The default windows here (30-day z-score window, day-of-week volume seasonality) assume
 months of continuous daily history. This session's accumulated data spans roughly two
 calendar days, for a catalog sweep that mostly touches each item once or twice — only a
 handful of frequently-resurfacing items (a few popular cases, and the one Tier A
@@ -14,7 +14,7 @@ watchlist item) have enough repeat observations to compute anything. The detecto
 are written to be correct and general (configurable windows, `min_periods` guards that
 skip output rather than fabricate a baseline from insufficient history) — the actual
 numbers reported in docs/METRICS.md reflect this small real dataset, not a validated
-30-day run. Re-run once Phase 1's 24h+ soak test (still pending) produces real continuous
+30-day run. Re-run once the 24h+ soak test (still pending) produces real continuous
 history.
 
 ## Money-domain safety
@@ -58,7 +58,7 @@ def detect_price_zscore_anomalies(
 ) -> pd.DataFrame:
     """`daily_df` columns: app_id, market_hash_name, money_domain, observation_date,
     close_price (from mart_item_daily). `window`/`min_periods` are in TRADING DAYS
-    (calendar days with an observation), matching the spec's "30-day window" phrasing —
+    (calendar days with an observation), matching the intended "30-day window" —
     not raw poll counts, since polling cadence is irregular.
 
     The rolling mean/std are computed over the window PRIOR to the current day (shifted by
@@ -114,7 +114,7 @@ def detect_spread_widening_anomalies(
     """`orderbook_df` columns: app_id, market_hash_name, observed_at, spread_bps (from
     fct_orderbook_snapshot). One-sided: only flags WIDENING (current spread above its
     EWMA baseline), not narrowing — "a sudden spread blowout usually precedes a price
-    move" (CLAUDE.md), narrowing isn't the signal being asked for.
+    move", narrowing isn't the signal being asked for.
     """
     if orderbook_df.empty:
         return pd.DataFrame(columns=ANOMALY_COLUMNS)
@@ -159,7 +159,7 @@ def detect_volume_spike_anomalies(
 ) -> pd.DataFrame:
     """`daily_df` columns: app_id, market_hash_name, money_domain, observation_date,
     total_volume (from mart_item_daily). Baseline is per (item, day-of-week) — "Steam
-    sales and esports events create strong, real periodicity" (CLAUDE.md) — so a Saturday
+    sales and esports events create strong, real periodicity" — so a Saturday
     is only compared against other Saturdays, never against a Tuesday.
 
     Requires at least `min_weekday_occurrences` PRIOR observations of that same weekday
@@ -213,7 +213,7 @@ def detect_volume_spike_anomalies(
 def detect_crossed_book_anomalies(orderbook_df: pd.DataFrame) -> pd.DataFrame:
     """`orderbook_df` columns: app_id, market_hash_name, observed_at, highest_buy,
     lowest_sell, spread_bps (from fct_orderbook_snapshot). A distinct class from the
-    price/spread/volume detectors above — CLAUDE.md asks for it separately, and it's
+    price/spread/volume detectors above — it's a separate class on purpose, and it's
     genuinely a different phenomenon (a book-state inconsistency, not a return/spread
     statistic). See docs/DECISIONS.md: in this project's real data, 26% of orderbook
     observations are crossed — not rare, and traced to Steam's own backend, not our

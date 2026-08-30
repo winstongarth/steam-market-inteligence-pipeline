@@ -20,8 +20,8 @@ def _html_response(status: int = 200) -> httpx.Response:
 
 @pytest.mark.asyncio
 async def test_expect_json_false_does_not_trip_ban_detection_on_html():
-    """Regression test: the §3.3 listings/bucket page is legitimately HTML. Bug found
-    Phase 1, 2026-08-20 — the ban-shape check used to fire on ANY non-JSON body regardless
+    """Regression test: the listings/bucket page is legitimately HTML. Bug found
+    2026-08-20 — the ban-shape check used to fire on ANY non-JSON body regardless
     of what the caller actually expected, halting the circuit breaker for 6h on a normal
     200 OK page fetch."""
     client = SteamMarketClient()
