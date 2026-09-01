@@ -1,0 +1,39 @@
+EVIDENCE: full steam_market_batch DAG run, all 11 tasks green, against real data.
+`airflow dags test steam_market_batch 2026-08-21` inside the airflow-webserver container,
+after several real bugs found and fixed along the way (see docs/DECISIONS.md): a
+sys.path/PYTHONPATH issue specific to Airflow's task execution model, this dbt version's
+--project-dir/--profiles-dir being subcommand options rather than global ones, a wrong
+task-ordering bug (dbt_snapshot before its own dependency), a missing dbt_seed task, and
+a relative-DuckDB-path bug caused by BashOperator running each subprocess in a fresh
+temp-dir CWD. Both blocking gates (dbt_test_staging, dbt_test_marts) passed for real
+against the actual warehouse, and publish_alerts successfully delivered a real alert to
+the webhook-receiver container (confirmed separately in logs/alerts.jsonl inside that
+container). See also docs/evidence/quality-gate-failure-great-expectations.txt and
+quality-gate-failure-dbt.txt for the companion evidence that these same gates correctly
+BLOCK on deliberately injected bad data.
+
+[2026-08-21T03:56:01.344+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=wait_for_bronze map_index=-1
+[2026-08-21T03:56:36.628+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=wait_for_bronze, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035636
+[2026-08-21T03:56:36.652+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=copy_into_snowflake map_index=-1
+[2026-08-21T03:56:36.674+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=copy_into_snowflake, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035636
+[2026-08-21T03:56:36.697+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=run_quality_gates map_index=-1
+[2026-08-21T03:56:39.507+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=run_quality_gates, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035639
+[2026-08-21T03:56:39.529+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_seed map_index=-1
+[2026-08-21T03:56:44.993+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_seed, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035644
+[2026-08-21T03:56:45.020+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_run_staging map_index=-1
+[2026-08-21T03:56:50.716+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_run_staging, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035650
+[2026-08-21T03:56:50.739+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_test_staging map_index=-1
+[2026-08-21T03:56:54.853+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_test_staging, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035654
+[2026-08-21T03:56:54.876+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_snapshot map_index=-1
+[2026-08-21T03:56:59.750+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_snapshot, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035659
+[2026-08-21T03:56:59.771+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_run_marts map_index=-1
+[2026-08-21T03:57:04.739+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_run_marts, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035704
+[2026-08-21T03:57:04.760+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=dbt_test_marts map_index=-1
+[2026-08-21T03:57:09.794+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=dbt_test_marts, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035709
+[2026-08-21T03:57:09.816+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=detect_anomalies map_index=-1
+[2026-08-21T03:57:09.836+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=detect_anomalies, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035709
+[2026-08-21T03:57:09.854+0000] {dag.py:4396} INFO - [DAG TEST] starting task_id=publish_alerts map_index=-1
+[2026-08-21T03:57:09.886+0000] {alerting.py:40} INFO - alert sent: DAG run completed with no failed tasks
+[2026-08-21 03:57:09,887] {steam_market_batch.py:200} INFO - publish_alerts: alert sent=True, severity=info, summary=DAG run completed with no failed tasks
+[2026-08-21T03:57:09.887+0000] {steam_market_batch.py:200} INFO - publish_alerts: alert sent=True, severity=info, summary=DAG run completed with no failed tasks
+[2026-08-21T03:57:09.889+0000] {taskinstance.py:353} INFO - Marking task as SUCCESS. dag_id=steam_market_batch, task_id=publish_alerts, run_id=manual__2026-08-21T00:00:00+00:00, execution_date=20260821T000000, start_date=, end_date=20260821T035709

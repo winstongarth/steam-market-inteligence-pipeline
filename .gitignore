@@ -41,5 +41,3 @@ dbt/.user.yml
 .vscode/
 .idea/
 
-# Docs — generated/local reference material, not shipped with the repo
-docs/
