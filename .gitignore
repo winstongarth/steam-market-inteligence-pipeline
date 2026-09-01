@@ -40,3 +40,6 @@ dbt/.user.yml
 .claude/
 .vscode/
 .idea/
+
+# Docs — generated/local reference material, not shipped with the repo
+docs/

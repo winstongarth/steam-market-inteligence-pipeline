@@ -26,16 +26,6 @@ backed by its own table:
 | Is the order book internally consistent (crossed, thin, deep)? | `fct_orderbook_snapshot` |
 | Does the same item price differently once currency is controlled for? | `mart_cross_currency_dislocation` |
 
-The order-book endpoint is the project's differentiator. The documented resolution path
-(`item_nameid` scraped out of an item's listing page) is dead — Valve's SPA now redirects
-every listing page into a bucket view with none of the old markers present. Rather than
-guess at a replacement, the SPA's own code-split JS chunks were downloaded and read
-statically, which surfaced the real mechanism: a small query-action RPC
-(`/market/orderbook?q=Load&qp=[app_id, market_bucket_id]`) keyed by a `market_bucket_id`
-that's free to obtain for commodity items (already present in `search/render` results) and
-costs one request per item family for wear-variant skins (embedded in the bucket page's
-inline JSON). See [`docs/DECISIONS.md`](docs/DECISIONS.md) ("Order-book resolution") for
-the full trace.
 
 ## 02 · Architecture
 
@@ -72,7 +62,13 @@ flowchart LR
         GATE[Great Expectations<br/>Bronze quality gate]
         DBT[dbt run / test / snapshot]
         ANOM[analytics/anomaly.py]
+        SYNC[analytics/export_to_grafana.py]
         ALERT[quality/alerting.py]
+    end
+
+    subgraph Dashboard["Dashboard layer"]
+        PGM[(postgres-marts<br/>full-refresh mirror)]
+        GRAF[Grafana<br/>CS2 anomaly + cross-currency dashboards]
     end
 
     API -->|rate-limited GET| CL --> RL
@@ -84,6 +80,8 @@ flowchart LR
     SV --> STG
     BZ --> GATE --> DBT --> MART
     MART --> ANOM --> ALERT
+    ANOM --> SYNC
+    MART --> SYNC --> PGM --> GRAF
 ```
 
 **Why Kafka for this volume?** Mostly decoupling and replay, not throughput — at a single
@@ -133,10 +131,18 @@ cached locally and never re-fetched for the same filing/observation. Full method
 | Streaming transport | Kafka (Redpanda) | Decouples producer/consumer and enables replay without re-hitting Steam — see §02 | `docker-compose.yml`, `ingest/kafka_producer.py` |
 | Stream processing | Spark Structured Streaming | `applyInPandasWithState` gives per-key CDC state without hand-rolling a state store | `streaming/cdc_job.py` |
 | Lake storage | MinIO (S3-compatible) | Local, zero-cost S3 semantics for Bronze/Silver Parquet | `docker-compose.yml` |
-| Warehouse | DuckDB + dbt | See rejection below (vs. Snowflake) | `dbt/` |
+| Warehouse | DuckDB + dbt | DuckDB gives you the same dbt models, SQL, and lineage with zero cost and zero setup at a data volume of thousands of rows | `dbt/` |
 | Orchestration | Airflow (Docker, LocalExecutor) | Blocking quality gates between layers, a real scheduler UI, industry-standard DAG semantics | `airflow/dags/` |
 | Data quality | Great Expectations (Bronze) + dbt tests (modeled layers) | GX suits raw-layer schema/freshness checks; dbt's own test framework is the natural fit once data is modeled — avoids duplicate-logic drift between the two | `quality/expectations/`, `dbt/tests/` |
+| Dashboard | Postgres (`postgres-marts`) + Grafana | See rejection below (vs. an unsigned DuckDB plugin) | `analytics/export_to_grafana.py`, `grafana/` |
 | Testing | pytest + `mypy --strict` | Fixture-based, never hits the live Steam API | `tests/` |
+
+**Rejected: an unsigned community DuckDB plugin for Grafana.** Grafana has no first-party
+DuckDB datasource. Rather than install an unsigned plugin (extra install/signing friction,
+less predictable offline), `analytics/export_to_grafana.py` does a full-refresh sync of the
+gold marts into `postgres-marts`, a disposable Postgres container Grafana talks to natively
+with zero plugins — the same reasoning already used for `postgres-airflow`, just serving
+warehouse data instead of orchestration metadata. DuckDB stays the single source of truth.
 
 
 ## 05 · Data model
@@ -238,9 +244,12 @@ fixed independently on both sides.
 ingest/           HTTP client, rate limiter + circuit breaker, endpoint parsers, scheduler
 streaming/        Spark CDC job, money/depth math, Bronze + Silver Kafka writers
 dbt/              seeds, staging/intermediate/marts, snapshots, singular tests
-analytics/        anomaly detection (z-score, EWMA spread, volume-spike, crossed-book)
+analytics/        anomaly detection (z-score, EWMA spread, volume-spike, crossed-book);
+                  export_to_grafana.py syncs gold marts to the dashboard's Postgres
 quality/          Great Expectations Bronze suite, alerting, webhook receiver
 airflow/dags/     the orchestration DAG
+grafana/          provisioned datasource + the two CS2 dashboards (anomaly detection,
+                  cross-currency pricing) — see docs/RUNBOOK.md
 scripts/          one-off recon/calibration scripts (recon, rate-limit probe, smoke test,
                   FX watchlist poll, query tuning)
 tests/            pytest suite — unit + fixture-based, never hits the live Steam API
@@ -284,6 +293,6 @@ bug found and how it was diagnosed: **[`docs/DECISIONS.md`](docs/DECISIONS.md)**
 ---
 
 Built against Steam's real Community Market API directly — no paid aggregators involved —
-per this project's own scraping-etiquette policy (§03): cache everything, rate-limit
+per this project's own scraping-etiquette policy (03): cache everything, rate-limit
 conservatively, respect a real circuit breaker, never commit scraped data (`data/` is
 gitignored throughout).

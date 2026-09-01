@@ -4,7 +4,7 @@
          ->  dbt_run_staging  ->  dbt_test_staging  (BLOCKING)
          ->  dbt_snapshot (needs stg_item_attributes from staging — see task-chain comment)
          ->  dbt_run_marts    ->  dbt_test_marts    (BLOCKING)
-         ->  detect_anomalies ->  publish_alerts
+         ->  detect_anomalies ->  sync_dashboard    ->  publish_alerts
 
 Runs inside the `airflow-scheduler`/`airflow-webserver` containers (docker-compose.yml),
 with the whole project mounted at /opt/project — same reasoning as running Spark in
@@ -13,7 +13,7 @@ how dbt/streaming already run.
 
 ## Deliberate simplifications, stated plainly (not hidden)
 
-- **`copy_into_snowflake` is a documented no-op this phase.** Snowflake is deliberately
+- **`copy_into_snowflake` is a documented no-op.** Snowflake is deliberately
   deferred until the soak test and unattended-DAG gaps close (docs/DECISIONS.md) — the
   24h soak test hasn't completed. The task exists so the DAG's structure matches the
   intended pipeline shape, and logs clearly that it's skipped rather than silently
@@ -23,9 +23,11 @@ how dbt/streaming already run.
   scheduler.** `ingest/scheduler.py` isn't running unattended yet (same 24h-soak-test
   gap) — a true sensor waiting on continuous fresh partitions would just time out in this
   environment. Revisit once the scheduler runs unattended.
-- **`detect_anomalies` is a stub.** Anomaly detection hasn't been built yet — this task
-  exists so the DAG's shape is complete, and logs explicitly that it's a placeholder
-  rather than silently no-op-ing without saying so.
+- **`sync_dashboard` pushes gold marts (including the anomaly/FX marts) to Postgres for
+  Grafana** (analytics/export_to_grafana.py) — DuckDB stays the source of truth, Postgres
+  is a disposable, fully-rebuilt-every-run read cache Grafana can query with zero plugins.
+  Runs with `trigger_rule=TriggerRule.ALL_DONE` so a `detect_anomalies` failure doesn't
+  leave the dashboard stuck on stale data without at least the other marts refreshing.
 
 ## Gates that actually block
 
@@ -166,11 +168,31 @@ def _run_quality_gates(**context) -> None:
 
 
 def _detect_anomalies(**context) -> None:
-    logger.warning(
-        "detect_anomalies: STUB. Anomaly detection (z-score/EWMA/volume-spike/crossed-book) "
-        "hasn't been built yet — this task exists so the DAG's shape is complete, not to "
-        "claim anomaly detection is implemented."
-    )
+    """Runs the anomaly detectors (analytics/anomaly.py) against the marts
+    dbt_run_marts/dbt_test_marts just built, and materializes main.mart_anomaly in the
+    same DuckDB warehouse. Uses DUCKDB_PATH from DBT_ENV, same convention dbt/the anomaly
+    module/this DAG all share (see profiles.yml's comment on why it must be absolute)."""
+    _ensure_project_on_path()
+    os.environ["DUCKDB_PATH"] = DBT_ENV["DUCKDB_PATH"]
+
+    from analytics.anomaly import main as run_anomaly_detection
+
+    run_anomaly_detection()
+
+
+def _sync_dashboard(**context) -> None:
+    """Pushes gold marts (dim_item, mart_item_daily, fct_orderbook_snapshot, mart_anomaly,
+    mart_cross_currency_dislocation) from DuckDB to postgres-marts for Grafana. See
+    analytics/export_to_grafana.py's module docstring for why Postgres, not a DuckDB
+    Grafana plugin."""
+    _ensure_project_on_path()
+    os.environ["DUCKDB_PATH"] = DBT_ENV["DUCKDB_PATH"]
+    os.environ.setdefault("GRAFANA_POSTGRES_URL", "postgresql+psycopg2://marts:marts@postgres-marts:5432/marts")
+    os.environ.setdefault("DASHBOARD_APP_IDS", "730")  # [CONFIG] CS2 by default
+
+    from analytics.export_to_grafana import main as sync_dashboard
+
+    sync_dashboard()
 
 
 def _publish_alerts(**context) -> None:
@@ -272,6 +294,12 @@ with DAG(
         python_callable=_detect_anomalies,
     )
 
+    sync_dashboard = PythonOperator(
+        task_id="sync_dashboard",
+        python_callable=_sync_dashboard,
+        trigger_rule=TriggerRule.ALL_DONE,  # refresh the other marts even if anomaly detection failed
+    )
+
     publish_alerts = PythonOperator(
         task_id="publish_alerts",
         python_callable=_publish_alerts,
@@ -287,11 +315,12 @@ with DAG(
         >> dbt_test_staging
         # dbt_snapshot depends on stg_item_attributes (a staging model), so it must run
         # after dbt_run_staging, not before — dim_item (in dbt_run_marts) then depends on
-        # the snapshot. Same ordering constraint hit manually earlier this session
-        # (docs/DECISIONS.md's dbt-duckdb setup), fixed here in the DAG itself.
+        # the snapshot. Same ordering constraint hit manually during initial dbt setup
+        # (docs/DECISIONS.md), fixed here in the DAG itself.
         >> dbt_snapshot
         >> dbt_run_marts
         >> dbt_test_marts
         >> detect_anomalies
+        >> sync_dashboard
         >> publish_alerts
     )
